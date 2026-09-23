@@ -18,8 +18,8 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 22.14.0
-      - key: PORT
-        value: 10000           # Render 会注入 PORT，这里给个默认值兜底
+      # 注意：不要硬编码 PORT。Render 会自动注入 PORT，server.js 读取 process.env.PORT，
+      #       写死会导致监听端口与健康检查端口不一致而部署失败。
       # ↓↓↓ 必填：持久化到 GitHub（否则重启丢数据）
       - key: GITHUB_TOKEN
         sync: false            # 在 Render 后台手动填入，不要写进仓库
