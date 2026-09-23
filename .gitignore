@@ -1,0 +1,28 @@
+# 运行时数据库：含账号、密码哈希、登录日志与人工编辑内容
+# ⚠️ 绝不能提交到远程仓库（尤其公开仓库），否则会泄露账号与内部业务资料
+data/xwk.db
+data/xwk.db-shm
+data/xwk.db-wal
+data/*.polluted-bak
+
+# 本地持久化快照（含密码哈希与日志）
+# 云端持久化走独立的 xwk-persist 分支，由程序通过 API 推送，不经主分支
+data/persist/
+
+# 依赖
+node_modules/
+
+# 日志与临时文件
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Python 缓存（部署脚本产生）
+__pycache__/
+*.pyc
+
+# 编辑器
+.vscode/
+.idea/
+*.swp

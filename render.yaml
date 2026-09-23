@@ -1,0 +1,38 @@
+# Render 部署配置（免费层）
+# 用法：在 Render 后台选择 "New +" → "Blueprint" → 选中本仓库，会自动按此文件创建服务
+#
+# ⚠️ 免费层文件系统是临时的，重启即清空。本服务已内置持久化：
+#    启动时从 Git 的 xwk-persist 分支拉回账号与编辑内容，运行中定期推送快照。
+#    因此必须在下方 env 里配置 GITHUB_TOKEN 与 GITHUB_REPO，否则重启会丢失数据。
+
+services:
+  - type: web
+    name: xwk-knowledge-base
+    runtime: node
+    plan: free
+    region: singapore          # 新加坡，对国内访问相对友好；可改 oregon / frankfurt
+    buildCommand: npm install --omit=dev --no-audit --no-fund
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    autoDeploy: true           # main 分支推送后自动部署（快照走独立分支，不会触发部署）
+    envVars:
+      - key: NODE_VERSION
+        value: 22.14.0
+      - key: PORT
+        value: 10000           # Render 会注入 PORT，这里给个默认值兜底
+      # ↓↓↓ 必填：持久化到 GitHub（否则重启丢数据）
+      - key: GITHUB_TOKEN
+        sync: false            # 在 Render 后台手动填入，不要写进仓库
+      - key: GITHUB_REPO
+        sync: false            # 形如 gaoyuxinba/xwk-knowledge-base
+      # ↓↓↓ 可选：按需调整
+      - key: PERSIST_BRANCH
+        value: xwk-persist
+      - key: PERSIST_DIR_REMOTE
+        value: persist
+      - key: PERSIST_INTERVAL_SEC
+        value: "60"
+      - key: PERSIST_LOG_CAP
+        value: "3000"
+      - key: PERSIST_ACCOUNTS
+        value: "true"          # 仓库必须是 Private，否则服务会自动跳过账号数据以防泄露

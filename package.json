@@ -1,0 +1,19 @@
+{
+  "name": "xwk-knowledge-base",
+  "version": "3.0.0",
+  "private": true,
+  "description": "小微行业知识库看板 V3 · Web 版（数据源：小微行业知识库看板V3.xlsx）",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "tunnel": "node tunnel.js",
+    "selfcheck": "node selfcheck.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "localtunnel": "^2.0.2"
+  }
+}
