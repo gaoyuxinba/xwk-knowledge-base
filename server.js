@@ -16,11 +16,11 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const os = require('os');
-const { DatabaseSync } = require('node:sqlite');
+const { DatabaseSync } = require('./db-compat');
 
 const ROOT = __dirname;
 // 数据目录可用 DATA_DIR 覆盖（云平台挂持久卷时使用）
-const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(ROOT, 'data');
+const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : (process.env.VERCEL ? '/tmp/data' : path.join(ROOT, 'data'));
 const DB_PATH = path.join(DATA_DIR, 'xwk.db');
 const SEED_PATH = path.join(ROOT, 'data', 'seed.json');
 const PORT = Number(process.env.PORT || 3210);
@@ -1212,6 +1212,10 @@ app.use((err, req, res, next) => {
 let saveTimer = null;
 function scheduleSave() {
   if (saveTimer) clearTimeout(saveTimer);
+  if (process.env.VERCEL) {
+    persist.save(false).catch((e) => console.error('[快照失败]', e.message));
+    return;
+  }
   saveTimer = setTimeout(() => {
     saveTimer = null;
     persist.save(false).catch((e) => console.error('[快照失败]', e.message));
@@ -1265,4 +1269,12 @@ async function boot() {
   return server;
 }
 
-boot().catch((e) => { console.error('[启动失败]', e); process.exit(1); });
+// Vercel serverless: 初始化持久化并导出 app；本地模式：正常启动
+if (process.env.VERCEL) {
+  persist.init(db, { persistDir: path.join(DATA_DIR, 'persist') })
+    .then((r) => { reloadAfterRestore(); console.log('[Vercel] 持久化恢复：' + r.source); })
+    .catch((e) => console.error('[Vercel 持久化失败]', e.message));
+  module.exports = app;
+} else {
+  boot().catch((e) => { console.error('[启动失败]', e); process.exit(1); });
+}
