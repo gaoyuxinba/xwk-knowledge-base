@@ -5,7 +5,7 @@
       "src": "server.js",
       "use": "@vercel/node",
       "config": {
-        "includeFiles": "public/**,data/seed.json,db-compat.js,persistence.js"
+        "includeFiles": "public/**,data/seed.json,db-compat.js,persistence.js,memory-db.js"
       }
     }
   ],
