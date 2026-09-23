@@ -1,13 +1,15 @@
 {
   "version": 2,
-  "framework": null,
-  "functions": {
-    "server.js": {
-      "memory": 1024,
-      "maxDuration": 30
+  "builds": [
+    {
+      "src": "server.js",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": "public/**,data/seed.json,db-compat.js,persistence.js,memory-db.js"
+      }
     }
-  },
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/server.js" }
+  ],
+  "routes": [
+    { "src": "/(.*)", "dest": "server.js" }
   ]
 }
