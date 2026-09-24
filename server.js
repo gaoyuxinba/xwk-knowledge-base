@@ -1,6 +1,6 @@
 /**
  * 小微行业知识库看板 V3 · Web 版
- * 后端：Express + node:sqlite（账号 / 权限 / 登录审计 / 内容编辑覆盖层）
+ * 后端：Express + sql.js（账号 / 权限 / 登录审计 / 内容编辑覆盖层）
  *
  * 数据源：小微行业知识库看板V3.xlsx
  *   行业档案 + 前景利润  ← _idx
@@ -16,11 +16,13 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const os = require('os');
-const { DatabaseSync } = require('./db-compat');
+const { DatabaseSync, init: initSqlJs } = require('./db-compat');
 
 const ROOT = __dirname;
-// 数据目录可用 DATA_DIR 覆盖（云平台挂持久卷时使用）
-const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : (process.env.VERCEL ? '/tmp/data' : path.join(ROOT, 'data'));
+// 数据目录：Vercel 等 Serverless 环境用 /tmp
+const DATA_DIR = process.env.DATA_DIR 
+  ? path.resolve(process.env.DATA_DIR) 
+  : (process.env.VERCEL ? '/tmp/xwk-data' : path.join(ROOT, 'data'));
 const DB_PATH = path.join(DATA_DIR, 'xwk.db');
 const SEED_PATH = path.join(ROOT, 'data', 'seed.json');
 const PORT = Number(process.env.PORT || 3210);
@@ -43,10 +45,11 @@ const COLLECTIONS = {
   city_risks: { key: (r) => r['行业编号'] + '|' + r['城市'], label: '城市风险分级' },
 };
 
-// ---------------------------------------------------------------- 数据库
-fs.mkdirSync(DATA_DIR, { recursive: true });
-const db = new DatabaseSync(DB_PATH);
-db.exec(`
+// ---------------------------------------------------------------- 数据库（延迟初始化，在 boot() 中完成）
+let db = null;
+
+function initDatabaseTables() {
+  db.exec(`
 PRAGMA journal_mode = WAL;
 
 CREATE TABLE IF NOT EXISTS users (
@@ -125,6 +128,7 @@ CREATE TABLE IF NOT EXISTS site_settings (
   v TEXT NOT NULL DEFAULT ''
 );
 `);
+}
 
 // ---------------------------------------------------------------- 密码
 function hashPassword(pw, salt) {
@@ -145,13 +149,70 @@ function verifyPassword(pw, salt, hash) {
 
 const nowIso = () => new Date().toISOString();
 
-// 轻量迁移：老库若缺 is_builtin 列则补上
-try {
-  const cols = db.prepare("PRAGMA table_info(users)").all().map((c) => c.name);
-  if (!cols.includes('is_builtin')) db.exec('ALTER TABLE users ADD COLUMN is_builtin INTEGER NOT NULL DEFAULT 0');
-} catch { /* 忽略 */ }
+// ---------------------------------------------------------------- 数据装配（seed + 覆盖层）
+const DATA = {};
+let IND_SEARCH = new Map();
 
-// 初始超级管理员
+function loadCollection(name) {
+  const base = SEED[name] || [];
+  const rows = db.prepare('SELECT rec_key, field, value FROM content_overrides WHERE collection = ?').all(name);
+  if (!rows.length) return base.map((r) => ({ ...r }));
+
+  const keyFn = COLLECTIONS[name].key;
+  const ov = new Map();
+  for (const r of rows) {
+    if (!ov.has(r.rec_key)) ov.set(r.rec_key, {});
+    ov.get(r.rec_key)[r.field] = r.value;
+  }
+  return base.map((r) => {
+    const k = keyFn(r);
+    return ov.has(k) ? { ...r, ...ov.get(k) } : { ...r };
+  });
+}
+
+function refreshData() {
+  for (const n of Object.keys(COLLECTIONS)) DATA[n] = loadCollection(n);
+  // 索引
+  DATA._industryByCode = new Map(DATA.industries.map((r) => [r['行业编号'], r]));
+  DATA._modesByCode = new Map();
+  for (const m of DATA.modes) {
+    if (!DATA._modesByCode.has(m['行业编号'])) DATA._modesByCode.set(m['行业编号'], []);
+    DATA._modesByCode.get(m['行业编号']).push(m);
+  }
+  DATA._jobsByCode = new Map();
+  for (const j of DATA.jobs) {
+    if (!DATA._jobsByCode.has(j['行业编号'])) DATA._jobsByCode.set(j['行业编号'], []);
+    DATA._jobsByCode.get(j['行业编号']).push(j);
+  }
+  DATA._riskByCode = new Map();
+  for (const c of DATA.city_risks) {
+    if (!DATA._riskByCode.has(c['行业编号'])) DATA._riskByCode.set(c['行业编号'], []);
+    DATA._riskByCode.get(c['行业编号']).push(c);
+  }
+}
+
+function buildIndustrySearchIndex() {
+  const idxFields = ['行业编号', '行业门类', '细分行业', '典型经营主体形态', '必备证照资质',
+    '常见经营规模', '订单与客户来源', '典型融资用途', '前景趋势判断', '毛利率区间',
+    '净利率区间', '旺季月份', '淡季月份', '季节性资金缺口高峰', '主要经营风险',
+    '政策与外部驱动', '职业标签串'];
+  const m = new Map();
+  for (const ind of DATA.industries) {
+    const parts = idxFields.map((f) => ind[f] || '');
+    // 追加该行业的职业名，使「按岗位搜行业」成立（与 _idx Y列职业标签串一致）
+    const jobs = DATA._jobsByCode.get(ind['行业编号']) || [];
+    for (const j of jobs) parts.push(j['常见职位'] || '');
+    m.set(ind['行业编号'], {
+      code: ind['行业编号'],
+      cat: ind['行业门类'],
+      name: ind['细分行业'],
+      label: `${ind['行业编号']}-${ind['行业门类']}-${ind['细分行业']}`,
+      hay: parts.join(' ').toLowerCase(),
+    });
+  }
+  return m;
+}
+
 function ensureSuperAdmin() {
   const row = db.prepare('SELECT COUNT(*) AS n FROM users').get();
   if (row.n > 0) return;
@@ -164,7 +225,6 @@ function ensureSuperAdmin() {
   );
   console.log('[初始化] 已创建内置超级管理员 gaoyuxi（不可删除/降级/停用）');
 }
-ensureSuperAdmin();
 
 // ---------------------------------------------------------------- 工具
 function parseUA(ua) {
@@ -229,78 +289,7 @@ function logAudit(user, action, collection, target, field, oldVal, newVal, req) 
   );
 }
 
-// ---------------------------------------------------------------- 数据装配（seed + 覆盖层）
-function loadCollection(name) {
-  const base = SEED[name] || [];
-  const rows = db.prepare('SELECT rec_key, field, value FROM content_overrides WHERE collection = ?').all(name);
-  if (!rows.length) return base.map((r) => ({ ...r }));
-
-  const keyFn = COLLECTIONS[name].key;
-  const ov = new Map();
-  for (const r of rows) {
-    if (!ov.has(r.rec_key)) ov.set(r.rec_key, {});
-    ov.get(r.rec_key)[r.field] = r.value;
-  }
-  return base.map((r) => {
-    const k = keyFn(r);
-    return ov.has(k) ? { ...r, ...ov.get(k) } : { ...r };
-  });
-}
-
-const DATA = {};
-function refreshData() {
-  for (const n of Object.keys(COLLECTIONS)) DATA[n] = loadCollection(n);
-  // 索引
-  DATA._industryByCode = new Map(DATA.industries.map((r) => [r['行业编号'], r]));
-  DATA._modesByCode = new Map();
-  for (const m of DATA.modes) {
-    if (!DATA._modesByCode.has(m['行业编号'])) DATA._modesByCode.set(m['行业编号'], []);
-    DATA._modesByCode.get(m['行业编号']).push(m);
-  }
-  DATA._jobsByCode = new Map();
-  for (const j of DATA.jobs) {
-    if (!DATA._jobsByCode.has(j['行业编号'])) DATA._jobsByCode.set(j['行业编号'], []);
-    DATA._jobsByCode.get(j['行业编号']).push(j);
-  }
-  DATA._riskByCode = new Map();
-  for (const c of DATA.city_risks) {
-    if (!DATA._riskByCode.has(c['行业编号'])) DATA._riskByCode.set(c['行业编号'], []);
-    DATA._riskByCode.get(c['行业编号']).push(c);
-  }
-}
-refreshData();
-
 // ---------------------------------------------------------------- 看板查询引擎（严格复刻 Excel 公式）
-/**
- * 复刻 20_行业选择·搜索勾选：
- *   E列 检索串 = LOWER(编号 + 门类 + 细分行业 + _idx D..P + 职业标签串)
- *   G列 命中   = 检索词为空 → 1；否则 SEARCH(检索词, 检索串) 命中 → 1
- *   检索词     = SUBSTITUTE(TRIM(输入), "-", " ")
- *   N6 定位    = 勾选优先 → 精确编号 → 精确三段式标签 → 唯一命中
- */
-function buildIndustrySearchIndex() {
-  const idxFields = ['行业编号', '行业门类', '细分行业', '典型经营主体形态', '必备证照资质',
-    '常见经营规模', '订单与客户来源', '典型融资用途', '前景趋势判断', '毛利率区间',
-    '净利率区间', '旺季月份', '淡季月份', '季节性资金缺口高峰', '主要经营风险',
-    '政策与外部驱动', '职业标签串'];
-  const m = new Map();
-  for (const ind of DATA.industries) {
-    const parts = idxFields.map((f) => ind[f] || '');
-    // 追加该行业的职业名，使「按岗位搜行业」成立（与 _idx Y列职业标签串一致）
-    const jobs = DATA._jobsByCode.get(ind['行业编号']) || [];
-    for (const j of jobs) parts.push(j['常见职位'] || '');
-    m.set(ind['行业编号'], {
-      code: ind['行业编号'],
-      cat: ind['行业门类'],
-      name: ind['细分行业'],
-      label: `${ind['行业编号']}-${ind['行业门类']}-${ind['细分行业']}`,
-      hay: parts.join(' ').toLowerCase(),
-    });
-  }
-  return m;
-}
-let IND_SEARCH = buildIndustrySearchIndex();
-
 function normalizeKw(v) {
   return String(v == null ? '' : v).trim().replace(/-/g, ' ');
 }
@@ -337,11 +326,6 @@ function resolveIndustryCode(keyword, checkedCodes) {
 
 /**
  * 复刻 _m21 + 21表：职业显示逻辑
- *   F 本行业 = (编号 == 当前行业)
- *   G 关键词命中 = 检索词空→1；否则 SEARCH(检索词, LOWER(编号+行业名+职位))
- *   I 有效勾选 = G==1 且 职位在勾选列表中
- *   K 是否显示 = G!=1 → 0；否则 (存在任意勾选 ? I : 1)
- *   L 显示序号 = K 的累加；看板最多显示 10 条
  */
 function resolveJobs(code, jobKeyword, checkedJobs, limit = 10) {
   if (!code) return { total: 0, hit: 0, checked: 0, shown: [], all: [] };
@@ -399,11 +383,6 @@ function resolveJobs(code, jobKeyword, checkedJobs, limit = 10) {
 
 /**
  * 复刻 22表 + 看板 05 区块：城市显示逻辑
- *   H 命中 = 检索词空→1；否则 SEARCH(检索词, 城市名+定位标签+三段式标签)
- *   J 有效勾选 = H==1 且 已勾选
- *   L 是否显示 = H!=1→0；否则 (存在勾选 ? J : 1)
- *   M 显示序号 = L 累加；看板最多显示 8 行
- *   N/O 层级与依据 ← 00_整合明细（按 行业编号+城市名 匹配）
  */
 function resolveCities(code, cityKeyword, checkedCities, limit = 8) {
   const kw = normalizeKw(cityKeyword).toLowerCase();
@@ -514,8 +493,23 @@ app.set('trust proxy', true);
 app.use(express.json({ limit: '32mb' }));
 app.use(express.urlencoded({ extended: true, limit: '32mb' }));
 
+// CORS 跨域支持（允许 GitHub Pages 等前端域名调用 API）
+app.use((req, res, next) => {
+  const origin = req.headers.origin || '*';
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 204;
+    res.end();
+    return;
+  }
+  next();
+});
+
 // 所有成功的写操作（POST/PUT/DELETE/PATCH）后触发一次节流快照
-// scheduleSave 在下方定义，此处用闭包延迟调用
 app.use((req, res, next) => {
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
     res.on('finish', () => {
@@ -524,6 +518,33 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// JWT 密钥（FC 环境下用环境变量，本地用默认值）
+const JWT_SECRET = process.env.JWT_SECRET || 'xwk-knowledge-base-jwt-secret-key-2024';
+
+// 简单的 JWT 实现（HS256）
+function jwtSign(payload) {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const data = header + '.' + body;
+  const sig = crypto.createHmac('sha256', JWT_SECRET).update(data).digest('base64url');
+  return data + '.' + sig;
+}
+
+function jwtVerify(token) {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const data = parts[0] + '.' + parts[1];
+    const expectedSig = crypto.createHmac('sha256', JWT_SECRET).update(data).digest('base64url');
+    if (parts[2] !== expectedSig) return null;
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+    if (payload.exp && payload.exp < Date.now()) return null;
+    return payload;
+  } catch (e) {
+    return null;
+  }
+}
 
 function getSession(req) {
   let token = null;
@@ -534,12 +555,25 @@ function getSession(req) {
     if (m) token = decodeURIComponent(m.slice('xwk_token='.length));
   }
   if (!token) return null;
-  const s = db.prepare(`SELECT s.*, u.display_name, u.role, u.can_view, u.can_edit, u.can_manage, u.enabled, u.must_change
-      FROM sessions s JOIN users u ON u.id = s.user_id
-      WHERE s.token = ? AND s.revoked_at IS NULL AND s.expires_at > ?`).get(token, nowIso());
-  if (!s) return null;
-  if (!s.enabled) return null;
-  return { token, ...s };
+  
+  // 用 JWT 验证（无状态，不依赖数据库）
+  const payload = jwtVerify(token);
+  if (!payload) return null;
+  if (!payload.enabled) return null;
+  
+  return {
+    token,
+    user_id: payload.uid,
+    username: payload.username,
+    display_name: payload.display_name || payload.username,
+    role: payload.role || 'viewer',
+    can_view: payload.can_view ? 1 : 0,
+    can_edit: payload.can_edit ? 1 : 0,
+    can_manage: payload.can_manage ? 1 : 0,
+    enabled: payload.enabled ? 1 : 0,
+    must_change: payload.must_change ? 1 : 0,
+    expires_at: new Date(payload.exp).toISOString(),
+  };
 }
 
 function requireAuth(req, res, next) {
@@ -579,17 +613,31 @@ app.post('/api/login', (req, res) => {
     return res.status(403).json({ ok: false, error: '账号已停用，请联系超级管理员' });
   }
 
-  const token = crypto.randomBytes(32).toString('hex');
-  const exp = new Date(Date.now() + 12 * 3600 * 1000).toISOString();
+  // 生成 JWT token（无状态，多实例/冷启动都有效）
+  const expMs = Date.now() + 12 * 3600 * 1000;
+  const token = jwtSign({
+    uid: u.id,
+    username: u.username,
+    display_name: u.display_name,
+    role: u.role,
+    can_view: !!u.can_view,
+    can_edit: !!u.can_edit,
+    can_manage: !!u.can_manage,
+    enabled: !!u.enabled,
+    must_change: !!u.must_change,
+    iat: Date.now(),
+    exp: expMs,
+  });
+  const exp = new Date(expMs).toISOString();
   const ip = clientIp(req);
   const ua = String(req.headers['user-agent'] || '').slice(0, 500);
-  db.prepare('INSERT INTO sessions (token, user_id, username, created_at, expires_at, ip, user_agent) VALUES (?,?,?,?,?,?,?)')
-    .run(token, u.id, u.username, nowIso(), exp, ip, ua);
+  
+  // 记录登录日志（不依赖 session 表）
   db.prepare('UPDATE users SET last_login_at=?, last_login_ip=?, last_login_ua=? WHERE id=?')
     .run(nowIso(), ip, ua, u.id);
   logLogin(username, u.id, true, '', req);
 
-  res.setHeader('Set-Cookie', `xwk_token=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${12 * 3600}`);
+  res.setHeader('Set-Cookie', `xwk_token=${token}; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=${12 * 3600}`);
   res.json({
     ok: true,
     user: {
@@ -605,10 +653,9 @@ app.post('/api/login', (req, res) => {
 app.post('/api/logout', (req, res) => {
   const s = getSession(req);
   if (s) {
-    db.prepare('UPDATE sessions SET revoked_at=? WHERE token=?').run(nowIso(), s.token);
     logAudit({ username: s.username }, '登出', '', '', '', null, null, req);
   }
-  res.setHeader('Set-Cookie', 'xwk_token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
+  res.setHeader('Set-Cookie', 'xwk_token=; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=0');
   res.json({ ok: true });
 });
 
@@ -992,10 +1039,10 @@ function normalizePerms(b) {
   if (role === 'editor') return {
     role,
     can_view: b.can_view === false ? 0 : 1,
-    can_edit: b.can_edit === false ? 0 : 1,   // editor 默认拥有页面编辑权
+    can_edit: b.can_edit === false ? 0 : 1,
     can_manage: 0,
   };
-  return {                                     // viewer 默认只读
+  return {
     role,
     can_view: b.can_view === false ? 0 : 1,
     can_edit: b.can_edit === true ? 1 : 0,
@@ -1018,7 +1065,6 @@ app.put('/api/admin/users/:id', requireAuth, requireManage, (req, res) => {
   }
 
   // 安全护栏：不允许把最后一个「启用的」超级管理员停用/降权
-  // 注意：若目标本身已是停用状态，改动它不影响启用超管数量，应当放行
   if (u.role === 'super_admin' && u.enabled) {
     const supCount = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role='super_admin' AND enabled=1").get().n;
     const demoting = (b.role && b.role !== 'super_admin') || b.enabled === false;
@@ -1131,7 +1177,7 @@ app.get('/api/admin/persist', requireAuth, requireManage, (req, res) => {
   res.json({ ok: true, persist: persist.status() });
 });
 
-// 手动立即保存快照（部署前 / 关机前用）
+// 手动立即保存快照
 app.post('/api/admin/persist/save', requireAuth, requireManage, async (req, res) => {
   try {
     const r = await persist.save(true);
@@ -1196,7 +1242,6 @@ app.use((req, res) => {
   res.sendFile(path.join(ROOT, 'public', 'index.html'));
 });
 app.use((err, req, res, next) => {
-  // body-parser 的 JSON 解析错误：返回 400 而非 500
   if (err && (err.type === 'entity.parse.failed' || err instanceof SyntaxError && 'body' in err)) {
     return res.status(400).json({ ok: false, error: '请求体不是合法 JSON，请检查导入文件格式' });
   }
@@ -1208,14 +1253,10 @@ app.use((err, req, res, next) => {
   res.status(status).json({ ok: false, error: '服务器内部错误: ' + (err && err.message ? err.message : String(err)) });
 });
 
-/** 变更后的节流快照：1.5 秒内的多次改动合并为一次 */
+// ---------------------------------------------------------------- 节流快照
 let saveTimer = null;
 function scheduleSave() {
   if (saveTimer) clearTimeout(saveTimer);
-  if (process.env.VERCEL) {
-    persist.save(false).catch((e) => console.error('[快照失败]', e.message));
-    return;
-  }
   saveTimer = setTimeout(() => {
     saveTimer = null;
     persist.save(false).catch((e) => console.error('[快照失败]', e.message));
@@ -1228,14 +1269,47 @@ function reloadAfterRestore() {
   IND_SEARCH = buildIndustrySearchIndex();
 }
 
-async function boot() {
-  // 先恢复持久化状态（云上重启会从 Git 分支拉回账号与编辑内容）
+// ---------------------------------------------------------------- 启动
+async function boot(options = {}) {
+  const { startServer = true } = options;
+
+  // 1. 初始化 sql.js（WASM 异步加载）
+  await initSqlJs();
+  console.log('[boot] sql.js 初始化完成');
+
+  // 2. 创建数据目录 + 初始化数据库
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  db = new DatabaseSync(DB_PATH);
+  initDatabaseTables();
+  console.log('[boot] 数据库表结构初始化完成');
+
+  // 3. 轻量迁移：老库若缺 is_builtin 列则补上
+  try {
+    const cols = db.prepare("PRAGMA table_info(users)").all().map((c) => c.name);
+    if (!cols.includes('is_builtin')) db.exec('ALTER TABLE users ADD COLUMN is_builtin INTEGER NOT NULL DEFAULT 0');
+  } catch { /* 忽略 */ }
+
+  // 4. 初始超级管理员
+  ensureSuperAdmin();
+
+  // 5. 加载数据（seed + 覆盖层）并构建索引
+  refreshData();
+  IND_SEARCH = buildIndustrySearchIndex();
+  console.log(`[boot] 数据加载完成：${DATA.industries.length} 行业 / ${DATA.jobs.length} 职业 / ${DATA.cities.length} 城市`);
+
+  // 6. 恢复持久化状态（云上重启会从 Git 分支拉回账号与编辑内容）
   let restored = { source: 'none' };
   try {
     restored = await persist.init(db, { persistDir: path.join(DATA_DIR, 'persist') });
     reloadAfterRestore();
   } catch (e) {
     console.error('[持久化初始化失败，将以本地状态继续]', e.message);
+  }
+
+  // 7. 启动 HTTP 服务（FC 环境下可跳过，直接用 Express app 做代理）
+  if (!startServer) {
+    console.log('[boot] 初始化完成（FC 模式，不启动 HTTP 服务）');
+    return { server: null, app };
   }
 
   const server = app.listen(PORT, HOST, () => {
@@ -1266,15 +1340,35 @@ async function boot() {
     persist.save(true).catch(() => {}).finally(() => server.close(() => process.exit(0)));
     setTimeout(() => process.exit(0), 4000);
   });
-  return server;
+  return { server, app };
 }
 
-// Vercel serverless: 初始化持久化并导出 app；本地模式：正常启动
+// Vercel / 本地启动
+let appPromise = null;
+
+function getApp() {
+  if (appPromise) return appPromise;
+  appPromise = boot({ startServer: false }).then((r) => r.app);
+  return appPromise;
+}
+
 if (process.env.VERCEL) {
-  persist.init(db, { persistDir: path.join(DATA_DIR, 'persist') })
-    .then((r) => { reloadAfterRestore(); console.log('[Vercel] 持久化恢复：' + r.source); })
-    .catch((e) => console.error('[Vercel 持久化失败]', e.message));
-  module.exports = app;
-} else {
+  // Vercel: 导出 Express app，异步初始化
+  // 用中间件等待初始化完成
+  const express = require('express');
+  const vercelApp = express();
+  vercelApp.use(async (req, res, next) => {
+    try {
+      const app = await getApp();
+      app(req, res, next);
+    } catch (e) {
+      console.error('[Vercel 初始化失败]', e.message);
+      res.status(500).json({ ok: false, error: '服务初始化失败: ' + e.message });
+    }
+  });
+  module.exports = vercelApp;
+} else if (require.main === module) {
   boot().catch((e) => { console.error('[启动失败]', e); process.exit(1); });
 }
+
+module.exports = module.exports || { boot, app, getApp };
