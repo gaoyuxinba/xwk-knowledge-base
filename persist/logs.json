@@ -1,6 +1,6 @@
 {
  "_kind": "logs",
- "saved_at": "2026-09-24T06:12:20.574Z",
+ "saved_at": "2026-09-24T06:12:29.284Z",
  "login": [
   {
    "username": "gaoyuxi",
@@ -56,6 +56,28 @@
   }
  ],
  "audit": [
+  {
+   "username": "gaoyuxi",
+   "action": "修改自己的密码",
+   "collection": "users",
+   "target": "gaoyuxi",
+   "field": "",
+   "old_value": null,
+   "new_value": null,
+   "ip": "",
+   "at": "2026-09-24T06:12:29.222Z"
+  },
+  {
+   "username": "gaoyuxi",
+   "action": "手动保存快照",
+   "collection": "persist",
+   "target": "",
+   "field": "",
+   "old_value": null,
+   "new_value": "{\"pushed\":true}",
+   "ip": "",
+   "at": "2026-09-24T06:12:26.191Z"
+  },
   {
    "username": "gaoyuxi",
    "action": "修改自己的密码",
