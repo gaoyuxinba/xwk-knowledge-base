@@ -51,20 +51,65 @@ async function api(path, opt) {
   const headers = { 'Content-Type': 'application/json' };
   if (S.token) headers.Authorization = 'Bearer ' + S.token;
   const url = API_BASE + path;
-  let res;
-  try {
-    res = await fetch(url, { method: opt.method || 'GET', headers, body: opt.body ? JSON.stringify(opt.body) : undefined });
-  } catch (e) {
-    throw new Error('网络请求失败：' + e.message);
+  
+  // 最多重试 2 次（共 3 次尝试）
+  const maxRetries = opt.noRetry ? 0 : 2;
+  let lastError = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) {
+      await new Promise(r => setTimeout(r, 300 * attempt));
+    }
+    
+    try {
+      const res = await fetch(url, { method: opt.method || 'GET', headers, body: opt.body ? JSON.stringify(opt.body) : undefined });
+      
+      if (res.status === 401) {
+        if (S.user) { toast('登录已失效', '请重新登录', 'err'); doLogout(false); }
+        throw new Error('未登录');
+      }
+      
+      const ct = res.headers.get('content-type') || '';
+      let data;
+      try {
+        data = ct.includes('application/json') ? await res.json() : await res.text();
+      } catch(e) {
+        data = { error: '响应解析失败' };
+      }
+      
+      if (!res.ok || (data && data.ok === false)) {
+        const errMsg = (data && data.error) || ('请求失败 ' + res.status);
+        const fullMsg = errMsg + ' (' + path + ')';
+        
+        // 400、5xx、网络错误都重试（可能是偶发的）
+        const shouldRetry = (res.status === 400 || res.status >= 500) && attempt < maxRetries;
+        if (shouldRetry) {
+          lastError = new Error(fullMsg);
+          continue;
+        }
+        
+        throw new Error(fullMsg);
+      }
+      return data;
+    } catch (e) {
+      lastError = e;
+      // 网络错误重试
+      const isNetworkError = e.message && (
+        e.message.includes('网络请求失败') ||
+        e.message.includes('Failed to fetch') ||
+        e.message.includes('NetworkError') ||
+        e.message.includes('timeout') ||
+        e.name === 'TypeError'
+      );
+      if ((isNetworkError && attempt < maxRetries) || 
+          (e.message && e.message.includes('400') && attempt < maxRetries)) {
+        continue;
+      }
+      throw e;
+    }
   }
-  if (res.status === 401) {
-    if (S.user) { toast('登录已失效', '请重新登录', 'err'); doLogout(false); }
-    throw new Error('未登录');
-  }
-  const ct = res.headers.get('content-type') || '';
-  const data = ct.includes('application/json') ? await res.json() : await res.text();
-  if (!res.ok || (data && data.ok === false)) throw new Error((data && data.error) || ('请求失败 ' + res.status));
-  return data;
+  
+  throw lastError || new Error('请求失败');
 }
 
 // ------------------------------------------------------------------ 提示
