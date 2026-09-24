@@ -1,0 +1,82 @@
+{
+ "_kind": "logs",
+ "saved_at": "2026-09-24T06:12:20.574Z",
+ "login": [
+  {
+   "username": "gaoyuxi",
+   "user_id": 1,
+   "ok": 1,
+   "reason": "",
+   "ip": "",
+   "ip_public": "",
+   "device": "桌面端",
+   "browser": "未知浏览器",
+   "os_name": "未知系统",
+   "user_agent": "",
+   "at": "2026-09-24T06:12:20.518Z"
+  },
+  {
+   "username": "gaoyuxi",
+   "user_id": 1,
+   "ok": 1,
+   "reason": "",
+   "ip": "",
+   "ip_public": "",
+   "device": "桌面端",
+   "browser": "未知浏览器",
+   "os_name": "未知系统",
+   "user_agent": "",
+   "at": "2026-09-24T06:12:20.212Z"
+  },
+  {
+   "username": "gaoyuxi",
+   "user_id": 1,
+   "ok": 1,
+   "reason": "",
+   "ip": "",
+   "ip_public": "",
+   "device": "桌面端",
+   "browser": "未知浏览器",
+   "os_name": "未知系统",
+   "user_agent": "",
+   "at": "2026-09-24T06:11:44.817Z"
+  },
+  {
+   "username": "gaoyuxi",
+   "user_id": 1,
+   "ok": 1,
+   "reason": "",
+   "ip": "",
+   "ip_public": "",
+   "device": "桌面端",
+   "browser": "未知浏览器",
+   "os_name": "未知系统",
+   "user_agent": "",
+   "at": "2026-09-24T06:10:48.773Z"
+  }
+ ],
+ "audit": [
+  {
+   "username": "gaoyuxi",
+   "action": "修改自己的密码",
+   "collection": "users",
+   "target": "gaoyuxi",
+   "field": "",
+   "old_value": null,
+   "new_value": null,
+   "ip": "",
+   "at": "2026-09-24T06:12:20.416Z"
+  },
+  {
+   "username": "gaoyuxi",
+   "action": "手动保存快照",
+   "collection": "persist",
+   "target": "",
+   "field": "",
+   "old_value": null,
+   "new_value": "{\"error\":\"is at 3864f834edfa1db4ebbcd3848f901573f1e9c687 but expected e3db9e195b15a8a3827ced2e0ddd7a8d55f7c800\"}",
+   "ip": "",
+   "at": "2026-09-24T06:10:53.063Z"
+  }
+ ]
+}
