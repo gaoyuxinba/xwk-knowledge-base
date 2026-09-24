@@ -5,11 +5,20 @@
       "src": "server.js",
       "use": "@vercel/node",
       "config": {
-        "includeFiles": "public/**,data/seed.json,db-compat.js,persistence.js,memory-db.js"
+        "includeFiles": [
+          "public/**",
+          "data/seed.json",
+          "db-compat.js",
+          "persistence.js",
+          "memory-db.js"
+        ]
       }
     }
   ],
   "routes": [
-    { "src": "/(.*)", "dest": "server.js" }
+    {
+      "src": "/(.*)",
+      "dest": "server.js"
+    }
   ]
 }
