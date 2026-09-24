@@ -10,15 +10,12 @@
           "data/seed.json",
           "db-compat.js",
           "persistence.js",
-          "memory-db.js"
+          "node_modules/sql.js/dist/**"
         ]
       }
     }
   ],
   "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "server.js"
-    }
+    { "src": "/(.*)", "dest": "server.js" }
   ]
 }
