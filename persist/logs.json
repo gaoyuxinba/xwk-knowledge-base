@@ -1,0 +1,20 @@
+{
+ "_kind": "logs",
+ "saved_at": "2026-09-24T07:56:21.826Z",
+ "login": [
+  {
+   "username": "gaoyuxi",
+   "user_id": 1,
+   "ok": 1,
+   "reason": "",
+   "ip": "",
+   "ip_public": "",
+   "device": "桌面端",
+   "browser": "未知浏览器",
+   "os_name": "未知系统",
+   "user_agent": "",
+   "at": "2026-09-24T07:55:49.865Z"
+  }
+ ],
+ "audit": []
+}
