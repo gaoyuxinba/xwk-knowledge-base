@@ -60,30 +60,21 @@ async function gh(method, urlPath, body) {
 
 // ---------------------------------------------------------------- 快照生成
 function buildSnapshot() {
-  const isMemory = typeof db._getTables === 'function' || (db.constructor && db.constructor.name === 'MemoryDB');
-  let users, overrides, settings, logs, audit;
+  const users = db.prepare(`SELECT username, display_name, pass_salt, pass_hash, role,
+      can_view, can_edit, can_manage, enabled, must_change, is_builtin, remark,
+      created_at, created_by, last_login_at, last_login_ip, last_login_ua
+      FROM users ORDER BY id`).all();
 
-  if (isMemory) {
-    // 直接从内存表读取
-    const t = (db._getTables ? db._getTables() : db.tables) || {};
-    users = [...(t.users || [])].sort((a, b) => (a.id || 0) - (b.id || 0));
-    overrides = [...(t.content_overrides || [])].sort((a, b) => (a.id || 0) - (b.id || 0));
-    settings = [...(t.site_settings || [])].sort((a, b) => String(a.k).localeCompare(String(b.k)));
-    logs = [...(t.login_log || [])].sort((a, b) => (b.id || 0) - (a.id || 0)).slice(0, cfg.logCap);
-    audit = [...(t.audit_log || [])].sort((a, b) => (b.id || 0) - (a.id || 0)).slice(0, cfg.logCap);
-  } else {
-    users = db.prepare(`SELECT username, display_name, pass_salt, pass_hash, role,
-        can_view, can_edit, can_manage, enabled, must_change, is_builtin, remark,
-        created_at, created_by, last_login_at, last_login_ip, last_login_ua
-        FROM users ORDER BY id`).all();
-    overrides = db.prepare(`SELECT collection, rec_key, field, value, updated_by, updated_at
-        FROM content_overrides ORDER BY id`).all();
-    settings = db.prepare(`SELECT k, v FROM site_settings ORDER BY k`).all();
-    logs = db.prepare(`SELECT username, user_id, ok, reason, ip, ip_public, device, browser,
-        os_name, user_agent, at FROM login_log ORDER BY id DESC LIMIT ?`).all(cfg.logCap);
-    audit = db.prepare(`SELECT username, action, collection, target, field, old_value, new_value, ip, at
-        FROM audit_log ORDER BY id DESC LIMIT ?`).all(cfg.logCap);
-  }
+  const overrides = db.prepare(`SELECT collection, rec_key, field, value, updated_by, updated_at
+      FROM content_overrides ORDER BY id`).all();
+
+  const settings = db.prepare(`SELECT k, v FROM site_settings ORDER BY k`).all();
+
+  const logs = db.prepare(`SELECT username, user_id, ok, reason, ip, ip_public, device, browser,
+      os_name, user_agent, at FROM login_log ORDER BY id DESC LIMIT ?`).all(cfg.logCap);
+
+  const audit = db.prepare(`SELECT username, action, collection, target, field, old_value, new_value, ip, at
+      FROM audit_log ORDER BY id DESC LIMIT ?`).all(cfg.logCap);
 
   return {
     'users.json': JSON.stringify({ _kind: 'users', saved_at: new Date().toISOString(), rows: users }, null, 1),
@@ -115,12 +106,29 @@ function writeLocal(snap) {
 // ---------------------------------------------------------------- 远程读写
 async function fetchRemote() {
   const out = {};
+  // 读取标准文件
   for (const f of FILES) {
     try {
       const d = await gh('GET', `/repos/${cfg.repo}/contents/${cfg.remoteDir}/${f}?ref=${cfg.branch}`);
       if (d && d.content) out[f] = JSON.parse(Buffer.from(d.content, 'base64').toString('utf8'));
     } catch (e) {
       if (e.status !== 404) log(`拉取 ${f} 失败：${e.message}`);
+    }
+  }
+  // 如果有加密密钥，也尝试读取加密版本的敏感文件
+  if (cfg.encryptKey) {
+    for (const f of ['users.json', 'logs.json']) {
+      if (out[f]) continue; // 已有明文版就不用加密版了
+      const encName = f.replace('.json', '.enc.json');
+      try {
+        const d = await gh('GET', `/repos/${cfg.repo}/contents/${cfg.remoteDir}/${encName}?ref=${cfg.branch}`);
+        if (d && d.content) {
+          const encText = Buffer.from(d.content, 'base64').toString('utf8');
+          out[encName] = encText; // 存原始加密文本，restore 里解密
+        }
+      } catch (e) {
+        if (e.status !== 404) log(`拉取 ${encName} 失败：${e.message}`);
+      }
     }
   }
   return out;
@@ -188,139 +196,121 @@ async function checkRepoSafety() {
   }
 }
 
+// ---------------------------------------------------------------- 加密工具
+function encryptText(plainText, keyStr) {
+  const crypto = require('crypto');
+  const key = crypto.createHash('sha256').update(keyStr).digest();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  let enc = cipher.update(plainText, 'utf8', 'base64');
+  enc += cipher.final('base64');
+  const tag = cipher.getAuthTag().toString('base64');
+  return JSON.stringify({ _enc: 'aes-256-gcm', iv: iv.toString('base64'), tag, data: enc });
+}
+
+function decryptText(encJson, keyStr) {
+  const crypto = require('crypto');
+  try {
+    const obj = JSON.parse(encJson);
+    if (!obj._enc || obj._enc !== 'aes-256-gcm') return null;
+    const key = crypto.createHash('sha256').update(keyStr).digest();
+    const iv = Buffer.from(obj.iv, 'base64');
+    const tag = Buffer.from(obj.tag, 'base64');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(tag);
+    let dec = decipher.update(obj.data, 'base64', 'utf8');
+    dec += decipher.final('utf8');
+    return dec;
+  } catch (e) {
+    log('解密失败:', e.message);
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------- 恢复
 function restore(snapshotObj) {
   if (!snapshotObj || !Object.keys(snapshotObj).length) return { restored: 0 };
   let n = 0;
-  const isMemory = typeof db._getTables === 'function' || (db.constructor && db.constructor.name === 'MemoryDB');
+
+  // 如果有加密的 users.enc.json，先解密
+  if (snapshotObj['users.enc.json'] && cfg.encryptKey) {
+    const decrypted = decryptText(snapshotObj['users.enc.json'], cfg.encryptKey);
+    if (decrypted) {
+      try { snapshotObj['users.json'] = JSON.parse(decrypted); } catch(e) {}
+    }
+  }
+  // 如果有加密的 logs.enc.json，先解密
+  if (snapshotObj['logs.enc.json'] && cfg.encryptKey) {
+    const decrypted = decryptText(snapshotObj['logs.enc.json'], cfg.encryptKey);
+    if (decrypted) {
+      try { snapshotObj['logs.json'] = JSON.parse(decrypted); } catch(e) {}
+    }
+  }
 
   const users = snapshotObj['users.json'];
   if (users && Array.isArray(users.rows)) {
-    if (isMemory) {
-      const t = db._getTables ? db._getTables() : db.tables;
-      for (const u of users.rows) {
-        const existing = (t.users || []).find(x => x.username === u.username);
-        if (existing) {
-          Object.assign(existing, u);
-        } else {
-          if (!t.users) t.users = [];
-          t.users.push({ ...u, id: (t.users.length + 1) });
-        }
-        n++;
-      }
-    } else {
-      const ins = db.prepare(`INSERT INTO users
-        (username, display_name, pass_salt, pass_hash, role, can_view, can_edit, can_manage,
-         enabled, must_change, is_builtin, remark, created_at, created_by, last_login_at, last_login_ip, last_login_ua)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        ON CONFLICT(username) DO UPDATE SET
-          display_name=excluded.display_name, pass_salt=excluded.pass_salt, pass_hash=excluded.pass_hash,
-          role=excluded.role, can_view=excluded.can_view, can_edit=excluded.can_edit, can_manage=excluded.can_manage,
-          enabled=excluded.enabled, must_change=excluded.must_change, remark=excluded.remark`);
-      for (const u of users.rows) {
-        ins.run(u.username, u.display_name || '', u.pass_salt, u.pass_hash, u.role || 'viewer',
-          u.can_view ? 1 : 0, u.can_edit ? 1 : 0, u.can_manage ? 1 : 0,
-          u.enabled ? 1 : 0, u.must_change ? 1 : 0, u.is_builtin ? 1 : 0, u.remark || '',
-          u.created_at || new Date().toISOString(), u.created_by || 'persist',
-          u.last_login_at || null, u.last_login_ip || null, u.last_login_ua || null);
-        n++;
-      }
+    const ins = db.prepare(`INSERT INTO users
+      (username, display_name, pass_salt, pass_hash, role, can_view, can_edit, can_manage,
+       enabled, must_change, is_builtin, remark, created_at, created_by, last_login_at, last_login_ip, last_login_ua)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(username) DO UPDATE SET
+        display_name=excluded.display_name, pass_salt=excluded.pass_salt, pass_hash=excluded.pass_hash,
+        role=excluded.role, can_view=excluded.can_view, can_edit=excluded.can_edit, can_manage=excluded.can_manage,
+        enabled=excluded.enabled, must_change=excluded.must_change, remark=excluded.remark`);
+    for (const u of users.rows) {
+      ins.run(u.username, u.display_name || '', u.pass_salt, u.pass_hash, u.role || 'viewer',
+        u.can_view ? 1 : 0, u.can_edit ? 1 : 0, u.can_manage ? 1 : 0,
+        u.enabled ? 1 : 0, u.must_change ? 1 : 0, u.is_builtin ? 1 : 0, u.remark || '',
+        u.created_at || new Date().toISOString(), u.created_by || 'persist',
+        u.last_login_at || null, u.last_login_ip || null, u.last_login_ua || null);
+      n++;
     }
   }
 
   const ov = snapshotObj['overrides.json'];
   if (ov && Array.isArray(ov.rows)) {
-    if (isMemory) {
-      const t = db._getTables ? db._getTables() : db.tables;
-      if (!t.content_overrides) t.content_overrides = [];
-      for (const r of ov.rows) {
-        const existing = t.content_overrides.find(x => x.collection === r.collection && x.rec_key === r.rec_key && x.field === r.field);
-        if (existing) {
-          existing.value = r.value; existing.updated_by = r.updated_by || 'persist'; existing.updated_at = r.updated_at || new Date().toISOString();
-        } else {
-          t.content_overrides.push({ ...r, value: r.value == null ? '' : r.value, updated_by: r.updated_by || 'persist', updated_at: r.updated_at || new Date().toISOString(), id: t.content_overrides.length + 1 });
-        }
-        n++;
-      }
-    } else {
-      const ins = db.prepare(`INSERT INTO content_overrides (collection, rec_key, field, value, updated_by, updated_at)
-        VALUES (?,?,?,?,?,?)
-        ON CONFLICT(collection, rec_key, field) DO UPDATE SET
-          value=excluded.value, updated_by=excluded.updated_by, updated_at=excluded.updated_at`);
-      for (const r of ov.rows) {
-        ins.run(r.collection, r.rec_key, r.field, r.value == null ? '' : r.value, r.updated_by || 'persist', r.updated_at || new Date().toISOString());
-        n++;
-      }
+    const ins = db.prepare(`INSERT INTO content_overrides (collection, rec_key, field, value, updated_by, updated_at)
+      VALUES (?,?,?,?,?,?)
+      ON CONFLICT(collection, rec_key, field) DO UPDATE SET
+        value=excluded.value, updated_by=excluded.updated_by, updated_at=excluded.updated_at`);
+    for (const r of ov.rows) {
+      ins.run(r.collection, r.rec_key, r.field, r.value == null ? '' : r.value, r.updated_by || 'persist', r.updated_at || new Date().toISOString());
+      n++;
     }
   }
 
   const st = snapshotObj['settings.json'];
   if (st && Array.isArray(st.rows)) {
-    if (isMemory) {
-      const t = db._getTables ? db._getTables() : db.tables;
-      if (!t.site_settings) t.site_settings = [];
-      for (const r of st.rows) {
-        const existing = t.site_settings.find(x => x.k === r.k);
-        if (existing) { existing.v = r.v == null ? '' : r.v; }
-        else { t.site_settings.push({ k: r.k, v: r.v == null ? '' : r.v }); }
-        n++;
-      }
-    } else {
-      const ins = db.prepare('INSERT INTO site_settings (k,v) VALUES (?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v');
-      for (const r of st.rows) { ins.run(r.k, r.v == null ? '' : r.v); n++; }
-    }
+    const ins = db.prepare('INSERT INTO site_settings (k,v) VALUES (?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v');
+    for (const r of st.rows) { ins.run(r.k, r.v == null ? '' : r.v); n++; }
   }
 
   const lg = snapshotObj['logs.json'];
   if (lg) {
     if (Array.isArray(lg.login)) {
-      if (isMemory) {
-        const t = db._getTables ? db._getTables() : db.tables;
-        if (!t.login_log) t.login_log = [];
-        for (const r of lg.login) {
-          const exists = t.login_log.some(x => x.username === (r.username || '') && x.at === (r.at || '') && x.ip === (r.ip || '') && x.ok === (r.ok ? 1 : 0));
-          if (!exists) {
-            t.login_log.push({ ...r, ok: r.ok ? 1 : 0, id: t.login_log.length + 1 });
-            n++;
-          }
-        }
-      } else {
-        const ins = db.prepare(`INSERT INTO login_log
-          (username, user_id, ok, reason, ip, ip_public, device, browser, os_name, user_agent, at)
-          SELECT ?,?,?,?,?,?,?,?,?,?,?
-          WHERE NOT EXISTS (SELECT 1 FROM login_log WHERE username=? AND at=? AND ip=? AND ok=?)`);
-        for (const r of lg.login) {
-          const res = ins.run(r.username || '', r.user_id || null, r.ok ? 1 : 0, r.reason || '',
-            r.ip || '', r.ip_public || '', r.device || '', r.browser || '', r.os_name || '',
-            r.user_agent || '', r.at || '',
-            r.username || '', r.at || '', r.ip || '', r.ok ? 1 : 0);
-          if (res.changes) n++;
-        }
+      const ins = db.prepare(`INSERT INTO login_log
+        (username, user_id, ok, reason, ip, ip_public, device, browser, os_name, user_agent, at)
+        SELECT ?,?,?,?,?,?,?,?,?,?,?
+        WHERE NOT EXISTS (SELECT 1 FROM login_log WHERE username=? AND at=? AND ip=? AND ok=?)`);
+      for (const r of lg.login) {
+        const res = ins.run(r.username || '', r.user_id || null, r.ok ? 1 : 0, r.reason || '',
+          r.ip || '', r.ip_public || '', r.device || '', r.browser || '', r.os_name || '',
+          r.user_agent || '', r.at || '',
+          r.username || '', r.at || '', r.ip || '', r.ok ? 1 : 0);
+        if (res.changes) n++;
       }
     }
     if (Array.isArray(lg.audit)) {
-      if (isMemory) {
-        const t = db._getTables ? db._getTables() : db.tables;
-        if (!t.audit_log) t.audit_log = [];
-        for (const r of lg.audit) {
-          const exists = t.audit_log.some(x => x.username === (r.username || '') && x.action === (r.action || '') && x.at === (r.at || '') && x.target === (r.target || ''));
-          if (!exists) {
-            t.audit_log.push({ ...r, id: t.audit_log.length + 1 });
-            n++;
-          }
-        }
-      } else {
-        const ins = db.prepare(`INSERT INTO audit_log
-          (username, action, collection, target, field, old_value, new_value, ip, at)
-          SELECT ?,?,?,?,?,?,?,?,?
-          WHERE NOT EXISTS (SELECT 1 FROM audit_log WHERE username=? AND action=? AND at=? AND target=?)`);
-        for (const r of lg.audit) {
-          const res = ins.run(r.username || '', r.action || '', r.collection || '', r.target || '',
-            r.field || '', r.old_value == null ? null : r.old_value, r.new_value == null ? null : r.new_value,
-            r.ip || '', r.at || '',
-            r.username || '', r.action || '', r.at || '', r.target || '');
-          if (res.changes) n++;
-        }
+      const ins = db.prepare(`INSERT INTO audit_log
+        (username, action, collection, target, field, old_value, new_value, ip, at)
+        SELECT ?,?,?,?,?,?,?,?,?
+        WHERE NOT EXISTS (SELECT 1 FROM audit_log WHERE username=? AND action=? AND at=? AND target=?)`);
+      for (const r of lg.audit) {
+        const res = ins.run(r.username || '', r.action || '', r.collection || '', r.target || '',
+          r.field || '', r.old_value == null ? null : r.old_value, r.new_value == null ? null : r.new_value,
+          r.ip || '', r.at || '',
+          r.username || '', r.action || '', r.at || '', r.target || '');
+        if (res.changes) n++;
       }
     }
   }
@@ -343,9 +333,21 @@ async function save(force) {
     return { local: true };
   }
 
-  // 公开仓库保护：剔除账号与日志
+  // 公开仓库保护：加密账号与日志（而不是剔除）
   let payload = snap;
-  if (cfg.safeUsers === false) {
+  if (cfg.safeUsers === false && cfg.encryptKey) {
+    // 用 AES-256-GCM 加密敏感文件
+    payload = { ...snap };
+    if (snap['users.json']) {
+      payload['users.enc.json'] = encryptText(snap['users.json'], cfg.encryptKey);
+      delete payload['users.json'];
+    }
+    if (snap['logs.json']) {
+      payload['logs.enc.json'] = encryptText(snap['logs.json'], cfg.encryptKey);
+      delete payload['logs.json'];
+    }
+  } else if (cfg.safeUsers === false) {
+    // 没有加密密钥时，退化为不推送敏感数据
     payload = { 'overrides.json': snap['overrides.json'], 'settings.json': snap['settings.json'] };
   }
   try {
@@ -377,6 +379,7 @@ async function init(database, opts) {
     intervalSec: Number(process.env.PERSIST_INTERVAL_SEC || 60),
     logCap: Number(process.env.PERSIST_LOG_CAP || 3000),
     persistAccounts: String(process.env.PERSIST_ACCOUNTS || 'true') !== 'false',
+    encryptKey: process.env.PERSIST_ENCRYPT_KEY || '',
     safeUsers: true,
   };
   fs.mkdirSync(cfg.dir, { recursive: true });
@@ -441,7 +444,8 @@ function status() {
     last_push_at: lastPushAt,
     last_push_ok: lastPushOk,
     last_push_msg: lastPushMsg,
-    account_data_persisted: cfg ? cfg.safeUsers : false,
+    account_data_persisted: cfg ? (cfg.safeUsers || (cfg.encryptKey && cfg.persistAccounts)) : false,
+    account_data_encrypted: cfg ? (!cfg.safeUsers && cfg.encryptKey && cfg.persistAccounts) : false,
     files: FILES,
   };
 }
