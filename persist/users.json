@@ -1,12 +1,12 @@
 {
  "_kind": "users",
- "saved_at": "2026-09-24T06:12:20.574Z",
+ "saved_at": "2026-09-24T06:12:29.284Z",
  "rows": [
   {
    "username": "gaoyuxi",
    "display_name": "超级管理员",
-   "pass_salt": "144a06333b30d0394ccdf3f13adb08bf",
-   "pass_hash": "9477f1b7008930d2175666d5d2d3920083df40637798bd38b5a2c6fae0ad335e07b0134e7cf7fbfa1f687d5f4077428a7c3193d66cfd27cd0e0044ce58bcd07a",
+   "pass_salt": "70a44a1ddc559d3f80284bc1b0e92058",
+   "pass_hash": "468879fd113dfcec974287aef974e7b765578770527fd21444db4998ee0ce52bb58c83162f5b6a354db0cdb5cbb22cbc33cc1615c6e651ee357dd63b3a96c9e4",
    "role": "super_admin",
    "can_view": 1,
    "can_edit": 1,
