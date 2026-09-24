@@ -26,13 +26,34 @@ const esc = (v) => String(v == null ? '' : v)
 const nl2br = (v) => esc(v).replace(/\n/g, '<br>');
 
 // ------------------------------------------------------------------ API
+// API 基础地址：如果页面是从 GitHub Pages 等静态托管打开的，就用 FC 的后端地址
+const API_BASE = (function() {
+  // 优先用全局配置（可在 index.html 里设置 window.__API_BASE__）
+  if (typeof window !== 'undefined' && window.__API_BASE__) return window.__API_BASE__;
+  // 如果是 file:// 协议，用默认 FC 地址
+  if (typeof location !== 'undefined' && location.protocol === 'file:') {
+    return 'https://xwk-app-svc-bdc-ezsbwsqoap.cn-shanghai.fcapp.run';
+  }
+  // 如果域名是 github.io 或者 vercel.app 等静态托管，用 FC 地址
+  if (typeof location !== 'undefined' && 
+      (location.hostname.endsWith('github.io') || 
+       location.hostname.endsWith('vercel.app') ||
+       location.hostname.endsWith('netlify.app') ||
+       location.hostname.endsWith('pages.dev'))) {
+    return 'https://xwk-app-svc-bdc-ezsbwsqoap.cn-shanghai.fcapp.run';
+  }
+  // 否则用相对路径（同域部署）
+  return '';
+})();
+
 async function api(path, opt) {
   opt = opt || {};
   const headers = { 'Content-Type': 'application/json' };
   if (S.token) headers.Authorization = 'Bearer ' + S.token;
+  const url = API_BASE + path;
   let res;
   try {
-    res = await fetch(path, { method: opt.method || 'GET', headers, body: opt.body ? JSON.stringify(opt.body) : undefined });
+    res = await fetch(url, { method: opt.method || 'GET', headers, body: opt.body ? JSON.stringify(opt.body) : undefined, credentials: 'include' });
   } catch (e) {
     throw new Error('网络请求失败：' + e.message);
   }
