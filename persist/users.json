@@ -1,12 +1,12 @@
 {
  "_kind": "users",
- "saved_at": "2026-09-24T07:53:03.081Z",
+ "saved_at": "2026-09-24T07:55:53.187Z",
  "rows": [
   {
    "username": "gaoyuxi",
    "display_name": "超级管理员",
-   "pass_salt": "c1fa86a58bfdffd9f623ddae25ff2b0a",
-   "pass_hash": "8b10f5f880a691f23f7e595c23fbf012ab1b76498be34a5fd01af98b6e35a046c59a23edb6204b18ef1d70e73f8bab7354f5b7a9b8aaf22a220b929459dec49e",
+   "pass_salt": "4adbf1c6653e272d505ec2f72be9bb3a",
+   "pass_hash": "cc315c9ad70583f2cd8bf8929c9b9268d0bdaac7ac7235ec4f426b61296b84d3b092a7802c3b18eb5fd57c10b1d72bb076ab00e5dd2536b2d299472c75773550",
    "role": "super_admin",
    "can_view": 1,
    "can_edit": 1,
@@ -15,9 +15,9 @@
    "must_change": 1,
    "is_builtin": 1,
    "remark": "系统内置超级管理员，首次登录后请立即修改密码",
-   "created_at": "2026-09-24T07:52:40.739Z",
+   "created_at": "2026-09-24T07:55:30.858Z",
    "created_by": "system",
-   "last_login_at": "2026-09-24T07:52:59.703Z",
+   "last_login_at": "2026-09-24T07:55:49.864Z",
    "last_login_ip": "",
    "last_login_ua": ""
   }
