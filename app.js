@@ -134,6 +134,9 @@ const LABEL = {
 };
 const lb = (f) => LABEL[f] || f;
 
+// ------------------------------------------------------------------ 页面路由（提前定义，供 go() 引用）
+var PAGES = {};
+
 // ------------------------------------------------------------------ 导航
 const NAV = [
   { g: '数据分析', items: [
@@ -1195,8 +1198,8 @@ function pageTransfer(c) {
   $$('[data-exp]').forEach((b) => { b.onclick = () => downloadJson(b.dataset.exp); });
 }
 
-// ================================================================== 页面路由
-const PAGES = {
+// ================================================================== 页面路由注册
+PAGES = {
   dashboard: pageDashboard, analytics: pageAnalytics, industries: pageIndustries,
   jobs: pageJobs, cityrisks: pageCityRisks, modes: pageModes,
   search: pageSearch, transfer: pageTransfer,
