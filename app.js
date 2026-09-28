@@ -379,10 +379,18 @@ function renderDash() {
     `<span>行业：<b>${esc(indLabel)}</b><span class="sep">｜</span>` +
     `职业：<b>${esc(jobLabel)}</b><span class="sep">｜</span>` +
     `城市：<b>${esc(cityLabel)}</b></span>` +
-    `<span class="act"><button class="btn sm" id="bReset2">重置</button></span>`;
+    `<span class="act">
+      <button class="btn sm" id="bReset2">重置全部</button>
+      <button class="btn green sm" id="bQuery2">查询数据</button>
+    </span>`;
   $('#bReset2').onclick = () => {
     S.dash = { industry: '', job: '', city: '', ci: new Set(), cj: new Set(), cc: new Set(), queried: false };
     go('dashboard');
+  };
+  $('#bQuery2').onclick = () => {
+    S.dash.queried = true;
+    toast('查询', '行业' + S.dash.ci.size + ' 职业' + S.dash.cj.size + ' 城市' + S.dash.cc.size);
+    renderDash();
   };
 
   let html = '';
