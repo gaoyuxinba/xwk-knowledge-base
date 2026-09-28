@@ -372,7 +372,6 @@ function pageDashboard(c) {
         <div class="chipbar" id="chCity"></div>
       </div>
       <div class="qbar-actions">
-        <button class="btn green" id="btnQuery">查 询</button>
         <button class="btn" id="btnReset">重置全部</button>
       </div>
     </div>
@@ -398,11 +397,6 @@ function pageDashboard(c) {
   // 城市输入：只过滤标签显示
   $('#qCity').oninput = (e) => { S.dash.city = e.target.value; deb(); };
 
-  // 查询按钮：滚动到结果区域
-  $('#btnQuery').onclick = () => {
-    loadDash();
-    $('#dashBody').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
   // 重置按钮：清空全部
   $('#btnReset').onclick = () => {
     S.dash = { industry: '', job: '', city: '', ci: new Set(), cj: new Set(), cc: new Set() };
