@@ -398,6 +398,8 @@ a { color: var(--c-brand); text-decoration: none; }
 
 /* ======================= 看板 ======================= */
 .qbar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 16px; }
+.qbar-actions { grid-column: 1 / -1; display: flex; gap: 10px; justify-content: flex-end; padding-top: 4px; }
+.qbar-actions .btn { min-width: 100px; }
 .qbox {
   background: var(--c-panel);
   border: 1px solid var(--c-line);

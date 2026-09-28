@@ -191,7 +191,7 @@ function go(page) {
   fn(c);
 }
 
-// ================================================================== 本地看板数据（复刻后端 dashboard 接口）
+// ================================================================== 本地看板数据
 function buildDashData(q) {
   const industries = getCollection('industries');
   const allJobs = getCollection('jobs');
@@ -204,12 +204,14 @@ function buildDashData(q) {
   let resolvedCode = null;
   let industry = null;
 
+  // 优先用 chip 选中的行业
   if (q.ci.size > 0) {
-    const code = [...q.ci][0].split('-')[0];
+    const code = [...q.ci][0];
     const found = industries.find((i) => i['行业编号'] === code);
     if (found) { resolvedCode = code; industry = found; }
   }
 
+  // 没有选中 chip 时，根据输入框文字搜索候选
   if (!resolvedCode && indQ) {
     const kw = indQ.toLowerCase();
     const codeMatch = industries.find((i) => i['行业编号'].toLowerCase() === kw);
@@ -225,8 +227,9 @@ function buildDashData(q) {
                (i['典型经营主体形态'] || '').toLowerCase().includes(kw) ||
                (i['典型融资用途'] || '').toLowerCase().includes(kw) ||
                (i['必备证照资质'] || '').toLowerCase().includes(kw);
-      }).slice(0, 6);
+      }).slice(0, 8);
       candidates = candidates.map((i) => `${i['行业编号']}-${i['细分行业']}`);
+      // 只有唯一命中时自动锁定
       if (candidates.length === 1) {
         const code = candidates[0].split('-')[0];
         industry = industries.find((i) => i['行业编号'] === code);
@@ -238,7 +241,7 @@ function buildDashData(q) {
 
   const industryLabel = industry ? `${industry['行业编号']}-${industry['细分行业']}` : '';
 
-  // Jobs —— 复刻后端逻辑：all 包含命中标记和三段式标签
+  // Jobs
   let jobsAll = [];
   let jobsHit = 0;
   let jobsShown = [];
@@ -253,10 +256,16 @@ function buildDashData(q) {
       return { ...j, '命中': hit, '三段式标签': j['常见职位'] };
     });
     jobsHit = jobsAll.filter((j) => j['命中']).length;
-    jobsShown = jobsAll.filter((j) => j['命中']).slice(0, 10);
+
+    // 如果选中了职业 chip，只显示选中的；否则显示全部命中（最多10）
+    if (q.cj.size > 0) {
+      jobsShown = jobsAll.filter((j) => q.cj.has(j['常见职位']));
+    } else {
+      jobsShown = jobsAll.filter((j) => j['命中']).slice(0, 10);
+    }
   }
 
-  // Cities —— 复刻后端逻辑：all 包含命中标记
+  // Cities
   const cityQ = (q.city || '').trim().toLowerCase();
   let citiesAll;
   if (cityQ) {
@@ -268,33 +277,39 @@ function buildDashData(q) {
   } else {
     citiesAll = allCities.map((c) => ({ ...c, '命中': true }));
   }
-  // 如果有 chip 选中，只标记选中的为命中
+
+  // 如果选中了城市 chip，只显示选中的
+  let cityRisks;
   if (q.cc.size > 0) {
-    citiesAll = allCities.map((c) => {
-      const hit = q.cc.has(c['城市名称']);
-      return { ...c, '命中': hit };
+    cityRisks = allCities.filter((c) => q.cc.has(c['城市名称'])).map((c) => {
+      if (resolvedCode) {
+        const risk = allRisks.find((r) => r['行业编号'] === resolvedCode && r['城市'] === c['城市名称']);
+        return {
+          '城市': c['城市名称'],
+          '定位标签': c['定位标签'] || '',
+          '风险层级': risk ? risk['风险层级'] : '',
+          '依据与尽调要点': risk ? risk['依据与尽调要点'] : ''
+        };
+      }
+      return { '城市': c['城市名称'], '定位标签': c['定位标签'] || '', '风险层级': '', '依据与尽调要点': '' };
+    });
+  } else {
+    // 没有选中城市时，全部命中城市最多显示 8 个
+    cityRisks = citiesAll.filter((c) => c['命中']).slice(0, 8).map((c) => {
+      if (resolvedCode) {
+        const risk = allRisks.find((r) => r['行业编号'] === resolvedCode && r['城市'] === c['城市名称']);
+        return {
+          '城市': c['城市名称'],
+          '定位标签': c['定位标签'] || '',
+          '风险层级': risk ? risk['风险层级'] : '',
+          '依据与尽调要点': risk ? risk['依据与尽调要点'] : ''
+        };
+      }
+      return { '城市': c['城市名称'], '定位标签': c['定位标签'] || '', '风险层级': '', '依据与尽调要点': '' };
     });
   }
-  const cityHit = citiesAll.filter((c) => c['命中']).length;
 
-  // 城市风险（shown 列表）
-  const cityRisks = citiesAll.filter((c) => c['命中']).slice(0, 8).map((c) => {
-    if (resolvedCode) {
-      const risk = allRisks.find((r) => r['行业编号'] === resolvedCode && r['城市'] === c['城市名称']);
-      return {
-        '城市': c['城市名称'],
-        '定位标签': c['定位标签'] || '',
-        '风险层级': risk ? risk['风险层级'] : '',
-        '依据与尽调要点': risk ? risk['依据与尽调要点'] : ''
-      };
-    }
-    return {
-      '城市': c['城市名称'],
-      '定位标签': c['定位标签'] || '',
-      '风险层级': '',
-      '依据与尽调要点': ''
-    };
-  });
+  const cityHit = citiesAll.filter((c) => c['命中']).length;
 
   // Modes
   const modes = resolvedCode ? allModes.filter((m) => m['行业编号'] === resolvedCode) : [];
@@ -302,8 +317,8 @@ function buildDashData(q) {
   return {
     status: {
       industry: resolvedCode ? industry['细分行业'] : (indQ ? `未找到匹配「${indQ}」的行业` : '请输入行业编号或关键词'),
-      job: (q.job || '').trim() || '全部职位',
-      city: (q.city || '').trim() || '全部城市',
+      job: q.cj.size > 0 ? `已选 ${q.cj.size} 个职位` : ((q.job || '').trim() || '全部职位'),
+      city: q.cc.size > 0 ? `已选 ${q.cc.size} 个城市` : ((q.city || '').trim() || '全部城市'),
     },
     resolvedCode,
     industryLabel,
@@ -333,7 +348,7 @@ function loadDash() {
   renderDash(d);
 }
 
-// ================================================================== 看板（完全复刻桌面版）
+// ================================================================== 看板
 function pageDashboard(c) {
   const q = S.dash;
   c.innerHTML = `
@@ -345,16 +360,20 @@ function pageDashboard(c) {
         <div class="chipbar" id="chInd"></div>
       </div>
       <div class="qbox">
-        <div class="qt"><span class="n">2</span>职业搜索</div>
-        <input type="text" id="qJob" placeholder="输入职位关键词（如 技术员、店长、司机），留空显示本行业全部职位" value="${esc(q.job)}" ${q.ci.size || q.industry ? '' : 'disabled'}>
+        <div class="qt"><span class="n">2</span>职业筛选</div>
+        <input type="text" id="qJob" placeholder="输入关键词过滤下方职位标签，点击标签可选中/取消" value="${esc(q.job)}" ${q.ci.size ? '' : 'disabled'}>
         <div class="qmeta" id="mJob">—</div>
         <div class="chipbar" id="chJob"></div>
       </div>
       <div class="qbox">
         <div class="qt"><span class="n">3</span>城市筛选</div>
-        <input type="text" id="qCity" placeholder="输入城市或定位关键词（如 重庆、港口、制造），留空显示全部城市" value="${esc(q.city)}">
+        <input type="text" id="qCity" placeholder="输入关键词过滤下方城市标签，点击标签可选中/取消" value="${esc(q.city)}">
         <div class="qmeta" id="mCity">—</div>
         <div class="chipbar" id="chCity"></div>
+      </div>
+      <div class="qbar-actions">
+        <button class="btn green" id="btnQuery">查 询</button>
+        <button class="btn" id="btnReset">重置全部</button>
       </div>
     </div>
 
@@ -363,10 +382,35 @@ function pageDashboard(c) {
     <div id="dashBody"></div>
   `;
 
-  const deb = debounce(() => loadDash(), 260);
-  $('#qInd').oninput = (e) => { S.dash.industry = e.target.value; deb(); };
+  const deb = debounce(() => loadDash(), 280);
+  // 行业输入：只搜候选，不自动锁定（除非唯一命中）
+  $('#qInd').oninput = (e) => {
+    S.dash.industry = e.target.value;
+    // 清除已选行业 chip（因为用户在重新输入）
+    if (S.dash.ci.size > 0) {
+      S.dash.ci.clear();
+      S.dash.cj.clear(); // 行业变了，职业清空
+    }
+    deb();
+  };
+  // 职业输入：只过滤标签显示
   $('#qJob').oninput = (e) => { S.dash.job = e.target.value; deb(); };
+  // 城市输入：只过滤标签显示
   $('#qCity').oninput = (e) => { S.dash.city = e.target.value; deb(); };
+
+  // 查询按钮：滚动到结果区域
+  $('#btnQuery').onclick = () => {
+    loadDash();
+    $('#dashBody').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  // 重置按钮：清空全部
+  $('#btnReset').onclick = () => {
+    S.dash = { industry: '', job: '', city: '', ci: new Set(), cj: new Set(), cc: new Set() };
+    $('#qInd').value = ''; $('#qJob').value = ''; $('#qCity').value = '';
+    loadDash();
+    toast('已重置', '全部筛选条件已清空');
+  };
+
   loadDash();
 }
 
@@ -388,31 +432,49 @@ function renderDash(d) {
         ${esc(d.status.industry)}</div></div>`;
 
   // ① 行业候选 chips
-  $('#mInd').innerHTML = d.resolvedCode
-    ? `已定位 <b>${esc(d.industryLabel)}</b>`
-    : (d.candidateTotal ? `命中 <b>${d.candidateTotal}</b> 条${d.candidateTotal > 6 ? '（显示前 6）' : ''}，点选下方标签锁定` : '无命中');
+  if (d.resolvedCode) {
+    $('#mInd').innerHTML = `已锁定 <b>${esc(d.industryLabel)}</b>　<button class="btn sm" id="btnUnlinkInd" style="margin-left:6px">取消锁定</button>`;
+    $('#btnUnlinkInd').onclick = () => {
+      q.ci.clear(); q.cj.clear();
+      q.industry = '';
+      $('#qInd').value = '';
+      loadDash();
+    };
+  } else {
+    $('#mInd').innerHTML = d.candidateTotal
+      ? `命中 <b>${d.candidateTotal}</b> 条，点击下方标签锁定行业`
+      : (q.industry ? '无命中，请换关键词' : '输入关键词搜索行业');
+  }
   $('#chInd').innerHTML = d.candidates.map((cb) => {
     const code = cb.split('-')[0];
-    const on = code === d.resolvedCode;
-    return `<span class="chip${on ? ' on' : ''}" data-code="${esc(code)}" data-label="${esc(cb)}">${esc(cb)}</span>`;
-  }).join('') || '<span class="hint">—</span>';
+    return `<span class="chip" data-code="${esc(code)}" data-label="${esc(cb)}">${esc(cb)}</span>`;
+  }).join('') || (d.resolvedCode ? '' : '<span class="hint">—</span>');
   $$('#chInd .chip').forEach((el) => {
     el.onclick = () => {
-      const code = el.dataset.code;
-      if (q.ci.has(code)) q.ci.delete(code); else q.ci.add(code);
-      [...q.ci].forEach((x) => { if (x !== code) q.ci.delete(x); });
+      // 单选：选中这个，清除其他
+      q.ci.clear();
+      q.ci.add(el.dataset.code);
+      // 同步输入框
       q.industry = el.dataset.label;
       $('#qInd').value = q.industry;
+      // 清空职业选择（因为行业变了）
+      q.cj.clear();
+      q.job = '';
+      $('#qJob').value = '';
       loadDash();
+      $('#dashBody').scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
   });
 
-  // ② 职业 chips（完全复刻桌面版）
+  // ② 职业 chips
   const jq = $('#qJob');
   jq.disabled = !d.resolvedCode;
-  $('#mJob').innerHTML = d.resolvedCode
-    ? `本行业 <b>${d.jobs.total}</b> 个职位｜命中 <b>${d.jobs.hit}</b>｜显示 <b>${d.jobs.shownCount}</b>${d.jobs.shownCount > 10 ? '（看板最多 10）' : ''}`
-    : '请先选定行业';
+  if (d.resolvedCode) {
+    const selTxt = q.cj.size > 0 ? `已选 <b>${q.cj.size}</b> 个职位` : '点击标签选择职位';
+    $('#mJob').innerHTML = `本行业 <b>${d.jobs.total}</b> 个职位｜${selTxt}｜${q.cj.size > 0 ? `显示选中的 <b>${d.jobs.shownCount}</b> 个` : `显示前 <b>${d.jobs.shownCount}</b> 个`}`;
+  } else {
+    $('#mJob').innerHTML = '请先锁定行业';
+  }
   $('#chJob').innerHTML = d.resolvedCode
     ? d.jobs.all.map((r) => {
         const on = q.cj.has(r['常见职位']);
@@ -428,8 +490,12 @@ function renderDash(d) {
     };
   });
 
-  // ③ 城市 chips（完全复刻桌面版）
-  $('#mCity').innerHTML = `命中 <b>${d.cities.hit}</b> 个城市｜显示 <b>${d.cities.shownCount}</b>${d.cities.shownCount > 8 ? '（看板最多 8）' : ''}`;
+  // ③ 城市 chips
+  if (q.cc.size > 0) {
+    $('#mCity').innerHTML = `已选 <b>${q.cc.size}</b> 个城市｜显示选中的城市`;
+  } else {
+    $('#mCity').innerHTML = `共 <b>${d.cities.hit}</b> 个城市｜显示前 <b>${d.cities.shownCount}</b> 个`;
+  }
   $('#chCity').innerHTML = d.cities.all.map((r) => {
     const on = q.cc.has(r['城市名称']);
     const dim = !r['命中'];
