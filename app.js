@@ -258,7 +258,7 @@ function pageDashboard(c) {
     S.dash = { industry: '', job: '', city: '', ci: new Set(), cj: new Set(), cc: new Set(), queried: false };
     go('dashboard');
   };
-  $('#bQuery').onclick = () => { S.dash.queried = true; renderDash(); };
+  $('#bQuery').onclick = () => { S.dash.queried = true; toast('查询', '行业' + S.dash.ci.size + ' 职业' + S.dash.cj.size + ' 城市' + S.dash.cc.size); renderDash(); };
   updateChips();
   if (q.queried) renderDash();
 }
@@ -295,8 +295,9 @@ function updateChips() {
   }).join('') || '<span class="hint">—</span>';
   $$('#chInd .chip').forEach(el => {
     el.onclick = () => {
-      const code = el.dataset.code;
-      if (q.ci.has(code)) q.ci.delete(code); else q.ci.add(code);
+      const code = el.getAttribute('data-code');
+      if (q.ci.has(code)) { q.ci.delete(code); }
+      else { q.ci.add(code); toast('已选行业', code + ' (共' + q.ci.size + '个)'); }
       updateChips();
     };
   });
@@ -480,20 +481,15 @@ function sec01(inds, allInds) {
 
 function sec02(modes) {
   if (!modes.length) return '';
-  let body;
-  if (!modes.length) {
-    body = '<div class="empty"><span class="big">🧩</span>该行业暂无经营模式条目</div>';
-  } else {
-    body = `<div class="grp-list">${modes.map((m, i) => {
-      return `<div class="grp">
-        <div class="grp-hd"><span class="idx">◆</span>${esc(m['细分模式'])}
-          <span class="rt">第 ${i + 1} / ${modes.length} 条</span><span class="toggle">▾</span></div>
-        <div class="grp-bd"><table class="kv">${F.modes_02.map(f => {
-          const v = m[f] || '';
-          return `<tr><th>${esc(lb(f))}</th><td>${v ? nl2br(v) : '<span style="color:#cbd5e1">—</span>'}</td></tr>`;
-        }).join('')}</table></div></div>`;
-    }).join('')}</div>`;
-  }
+  const body = `<div class="grp-list">${modes.map((m, i) => {
+    return `<div class="grp">
+      <div class="grp-hd"><span class="idx">◆</span>${esc(m['细分模式'])}
+        <span class="rt">第 ${i + 1} / ${modes.length} 条</span><span class="toggle">▾</span></div>
+      <div class="grp-bd"><table class="kv">${F.modes_02.map(f => {
+        const v = m[f] || '';
+        return `<tr><th>${esc(lb(f))}</th><td>${v ? nl2br(v) : '<span style="color:#cbd5e1">—</span>'}</td></tr>`;
+      }).join('')}</table></div></div>`;
+  }).join('')}</div>`;
   return `<div class="card fade-in">${cardHead('02', '经营模式', `共 ${modes.length} 条`)}
     <div class="card-bd">${body}</div></div>`;
 }
