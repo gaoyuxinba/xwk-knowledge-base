@@ -1195,6 +1195,13 @@ function pageTransfer(c) {
   $$('[data-exp]').forEach((b) => { b.onclick = () => downloadJson(b.dataset.exp); });
 }
 
+// ================================================================== 页面路由
+const PAGES = {
+  dashboard: pageDashboard, analytics: pageAnalytics, industries: pageIndustries,
+  jobs: pageJobs, cityrisks: pageCityRisks, modes: pageModes,
+  search: pageSearch, transfer: pageTransfer,
+};
+
 // ================================================================== 启动
 function showApp() {
   $('#loginView').style.display = 'none';
