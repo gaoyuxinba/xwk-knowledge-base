@@ -3,15 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>小微行业知识库 V3</title>
-<link rel="stylesheet" href="style-v3.css">
+<title>小微行业知识库 V3 · 行业与岗位知识看板</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<!-- ============ 登录页 ============ -->
+<!-- 登录页 -->
 <div id="loginView" class="login-wrap">
   <div class="login-card">
-    <div class="login-logo">🏢</div>
+    <div class="login-logo">📊</div>
     <h1>小微行业知识库</h1>
     <p class="login-sub">V3 · 行业与岗位知识看板</p>
     <form id="loginForm" autocomplete="on">
@@ -30,16 +30,17 @@
   </div>
 </div>
 
-<!-- ============ 主界面 ============ -->
+<!-- 主界面 -->
 <div id="appView" class="app" hidden>
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar">
     <div class="brand">
-      <span class="brand-ico">🏢</span>
+      <span class="brand-ico">📊</span>
       <span class="brand-txt">小微行业知识库<small>V3 看板</small></span>
     </div>
     <nav class="nav" id="nav"></nav>
     <div class="side-foot">
       <div id="metaMini" class="meta-mini"></div>
+      <div class="side-update" id="dataUpdate"></div>
     </div>
   </aside>
 
@@ -49,12 +50,12 @@
       <div class="crumb" id="crumb">数据看板</div>
       <div class="top-right">
         <div class="userbox">
-          <span class="avatar" id="userAvatar">高</span>
+          <span class="avatar" id="userAvatar">管</span>
           <div class="userinfo">
             <b id="userName">—</b>
             <small id="userRole">—</small>
           </div>
-          <div class="usermenu">
+          <div class="usermenu" id="userMenu">
             <button data-act="logout">退出登录</button>
           </div>
         </div>
@@ -65,7 +66,7 @@
   </div>
 </div>
 
-<!-- ============ 通用弹层 ============ -->
+<!-- 弹层 -->
 <div class="modal-mask" id="modalMask" hidden>
   <div class="modal" id="modalBox">
     <div class="modal-head"><b id="modalTitle">标题</b><button class="icon-btn" id="modalClose">✕</button></div>
@@ -75,11 +76,11 @@
 </div>
 <div class="toast-wrap" id="toastWrap"></div>
 
-<script src="data1-v3.js"></script>
-<script src="data2-v3.js"></script>
-<script src="data3-v3.js"></script>
-<script src="data4-v3.js"></script>
-<script src="data5-v3.js"></script>
-<script src="app-v3.js"></script>
+<!-- 数据文件 -->
+<script src="static/data1.js"></script>
+<script src="static/data2.js"></script>
+<script src="static/data3.js"></script>
+<script src="static/data4.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
