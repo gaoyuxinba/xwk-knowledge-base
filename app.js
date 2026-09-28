@@ -1,77 +1,50 @@
 /* ============================================================
-   小微行业知识库 V3 · 纯静态版
-   全部数据前端加载，无后端依赖
+   小微行业知识库看板 V3 · 纯静态版
+   数据全部内嵌，无后端依赖
    ============================================================ */
 'use strict';
 
-// ------------------------------------------------------------------ 预定义账号
-const USERS = [
-  { id: 1, username: 'admin', password: 'wt1201263', display_name: '管理员', role: 'super_admin', can_edit: true, can_view: true, can_manage: true, remark: '系统管理员' },
-];
+// ------------------------------------------------------------------ 数据合并
+const DB = {
+  meta: window.XWK_DATA_1 ? window.XWK_DATA_1.meta : {},
+  industries: window.XWK_DATA_1 ? window.XWK_DATA_1.industries : [],
+  modes: window.XWK_DATA_1 ? window.XWK_DATA_1.modes : [],
+  cities: window.XWK_DATA_1 ? window.XWK_DATA_1.cities : [],
+  jobs: window.XWK_DATA_2 ? window.XWK_DATA_2.jobs : [],
+  city_risks: window.XWK_DATA_3 ? window.XWK_DATA_3.city_risks : [],
+  salary: window.XWK_DATA_4 ? window.XWK_DATA_4.salary : {},
+  city_factors: window.XWK_DATA_4 ? window.XWK_DATA_4.city_factors : {},
+};
 
-const ROLE_NAME = { super_admin: '超级管理员', editor: '编辑人员', viewer: '浏览人员' };
+// localStorage 编辑覆盖层
+const EDITS_KEY = 'xwk_edits_v3';
+function loadEdits() { try { return JSON.parse(localStorage.getItem(EDITS_KEY) || '{}'); } catch { return {}; } }
+function saveEdits(e) { localStorage.setItem(EDITS_KEY, JSON.stringify(e)); }
+let EDITS = loadEdits();
+
+function applyEdits(collection, records) {
+  const ov = EDITS[collection];
+  if (!ov) return records;
+  return records.map(r => {
+    const k = keyOf(collection, r);
+    return ov[k] ? { ...r, ...ov[k] } : r;
+  });
+}
 
 // ------------------------------------------------------------------ 状态
 const S = {
   user: null,
   page: 'dashboard',
-  meta: null,
-  dash: { industry: '', job: '', city: '', ci: new Set(), cj: new Set(), cc: new Set() },
-  dashData: null,
-  edits: JSON.parse(localStorage.getItem('xwk_edits') || '{}'),
+  dash: { industry: '', job: '', city: '', ci: new Set(), cj: new Set(), cc: new Set(), queried: false },
+  cache: {},
 };
 
-const D = window.XWK_DATA || {};
 const $ = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 const esc = (v) => String(v == null ? '' : v)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const nl2br = (v) => esc(v).replace(/\n/g, '<br>');
-
-// ------------------------------------------------------------------ 数据初始化
-function initData() {
-  S.meta = D.meta || {};
-  S.meta.cities = D.cities || [];
-  const cats = {};
-  (D.industries || []).forEach((i) => {
-    const cat = i['行业门类'];
-    if (!cats[cat]) cats[cat] = [];
-    cats[cat].push(i['行业编号']);
-  });
-  S.meta.categories = cats;
-}
-
-// ------------------------------------------------------------------ 编辑覆盖层
-function getRecord(collection, rec) {
-  const key = keyOf(collection, rec);
-  const ov = S.edits[collection] && S.edits[collection][key];
-  if (!ov) return rec;
-  return { ...rec, ...ov };
-}
-function saveEdit(collection, recKey, field, value) {
-  if (!S.edits[collection]) S.edits[collection] = {};
-  if (!S.edits[collection][recKey]) S.edits[collection][recKey] = {};
-  S.edits[collection][recKey][field] = value;
-  localStorage.setItem('xwk_edits', JSON.stringify(S.edits));
-}
-function revertRecord(collection, recKey) {
-  if (S.edits[collection]) delete S.edits[collection][recKey];
-  localStorage.setItem('xwk_edits', JSON.stringify(S.edits));
-}
-function getCollection(collection) {
-  const raw = D[collection] || [];
-  return raw.map((r) => getRecord(collection, r));
-}
-
-function keyOf(collection, r) {
-  if (collection === 'industries') return r['行业编号'];
-  if (collection === 'modes') return r['行业编号'] + '|' + r['细分模式'];
-  if (collection === 'jobs') return r['行业编号'] + '|' + r['常见职位'];
-  if (collection === 'city_risks') return r['行业编号'] + '|' + r['城市'];
-  if (collection === 'cities') return r['城市名称'];
-  return '';
-}
 
 // ------------------------------------------------------------------ 提示
 function toast(title, msg, type) {
@@ -91,7 +64,6 @@ function modal(title, bodyHtml, footHtml, opts) {
   $('#modalFoot').innerHTML = footHtml || '';
   $('#modalBox').className = 'modal' + (opts.wide ? ' wide' : '');
   $('#modalMask').hidden = false;
-  return $('#modalBody');
 }
 function closeModal() { $('#modalMask').hidden = true; $('#modalBody').innerHTML = ''; $('#modalFoot').innerHTML = ''; }
 $('#modalClose').onclick = closeModal;
@@ -117,14 +89,8 @@ function heatClass(s) { return lvClass(s).replace('lv-', 'hc-'); }
 const F = {
   industries_01: ['细分行业', '典型经营主体形态', '必备证照资质', '常见经营规模', '订单与客户来源', '典型融资用途'],
   industries_03: ['前景趋势判断', '毛利率区间', '净利率区间', '旺季月份', '淡季月份', '季节性资金缺口高峰', '主要经营风险', '政策与外部驱动'],
-  industries_all: ['行业编号', '行业门类', '细分行业', '典型经营主体形态', '必备证照资质', '常见经营规模', '订单与客户来源', '典型融资用途',
-    '前景趋势判断', '毛利率区间', '净利率区间', '旺季月份', '淡季月份', '季节性资金缺口高峰', '主要经营风险', '政策与外部驱动', '职业标签串'],
   modes_02: ['运作方式', '盈利逻辑', '上下游与结算回款方式', '成本结构', '资金需求特点与周期', '授信关注要点'],
-  modes_all: ['行业编号', '细分模式', '运作方式', '盈利逻辑', '上下游与结算回款方式', '成本结构', '资金需求特点与周期', '授信关注要点'],
   jobs_04: ['这个岗位每天干什么', '审核时怎么问', '能查到哪些证据', '真干过的人怎么答', '没干过的破绽', '审批要点'],
-  jobs_all: ['行业编号', '常见职位', '这个岗位每天干什么', '审核时怎么问', '能查到哪些证据', '真干过的人怎么答', '没干过的破绽', '审批要点'],
-  risks_all: ['行业编号', '城市', '风险层级', '依据与尽调要点'],
-  cities_all: ['序号', '城市名称', '定位标签'],
 };
 const LABEL = {
   '常见经营规模': '常见经营规模（小微口径）',
@@ -134,8 +100,14 @@ const LABEL = {
 };
 const lb = (f) => LABEL[f] || f;
 
-// ------------------------------------------------------------------ 页面路由（提前定义，供 go() 引用）
-var PAGES = {};
+function keyOf(collection, r) {
+  if (collection === 'industries') return r['行业编号'];
+  if (collection === 'modes') return r['行业编号'] + '|' + r['细分模式'];
+  if (collection === 'jobs') return r['行业编号'] + '|' + r['常见职位'];
+  if (collection === 'city_risks') return r['行业编号'] + '|' + r['城市'];
+  if (collection === 'cities') return r['城市名称'];
+  return '';
+}
 
 // ------------------------------------------------------------------ 导航
 const NAV = [
@@ -144,14 +116,14 @@ const NAV = [
     { id: 'analytics', ico: '📈', t: '统计分析' },
   ]},
   { g: '知识管理', items: [
-    { id: 'industries', ico: '🏢', t: '行业管理', badge: () => S.meta && S.meta.industry_count },
-    { id: 'jobs', ico: '👥', t: '职业管理', badge: () => S.meta && S.meta.job_count },
-    { id: 'cityrisks', ico: '🏙', t: '城市风控', badge: () => S.meta && S.meta.city_risk_count },
-    { id: 'modes', ico: '🧩', t: '经营模式', badge: () => S.meta && S.meta.mode_count },
+    { id: 'industries', ico: '🏢', t: '行业管理', badge: () => DB.meta.industry_count },
+    { id: 'jobs', ico: '👥', t: '职业管理', badge: () => DB.meta.job_count },
+    { id: 'cityrisks', ico: '🏙', t: '城市风控', badge: () => DB.meta.city_risk_count },
+    { id: 'modes', ico: '🧩', t: '经营模式', badge: () => DB.meta.mode_count },
   ]},
   { g: '数据操作', items: [
     { id: 'search', ico: '🔍', t: '全局搜索' },
-    { id: 'transfer', ico: '🔄', t: '数据导出' },
+    { id: 'dataupdate', ico: '🔄', t: '数据更新' },
   ]},
 ];
 
@@ -164,7 +136,7 @@ function renderNav() {
       const b = i.badge ? i.badge() : null;
       h += `<div class="nav-item${S.page === i.id ? ' on' : ''}" data-page="${i.id}">
         <span class="ni">${i.ico}</span><span>${esc(i.t)}</span>
-        ${b ? `<span class="badge">${b}</span>` : ''}</div>`;
+        ${b != null ? `<span class="badge">${b}</span>` : ''}</div>`;
     }
     h += '</div>';
   }
@@ -174,7 +146,7 @@ function renderNav() {
 
 const PAGE_TITLE = {
   dashboard: '数据看板', analytics: '统计分析', industries: '行业管理', jobs: '职业管理',
-  cityrisks: '城市风控', modes: '经营模式', search: '全局搜索', transfer: '数据导出',
+  cityrisks: '城市风控', modes: '经营模式', search: '全局搜索', dataupdate: '数据更新中心',
 };
 
 function go(page) {
@@ -190,6 +162,54 @@ function go(page) {
   fn(c);
 }
 
+// ------------------------------------------------------------------ 登录
+const ACCOUNTS = [
+  { user: 'admin', pass: 'wt1201263', name: '管理员', role: 'admin', can_edit: true, can_manage: true },
+  { user: 'gaoyuxi', pass: 'wt1201263', name: '高宇欣', role: 'admin', can_edit: true, can_manage: true },
+];
+
+$('#loginForm').onsubmit = (e) => {
+  e.preventDefault();
+  const u = $('#loginUser').value.trim();
+  const p = $('#loginPass').value;
+  const acc = ACCOUNTS.find(a => a.user === u && a.pass === p);
+  if (!acc) {
+    $('#loginErr').textContent = '账号或密码不正确';
+    return;
+  }
+  S.user = acc;
+  $('#loginView').hidden = true;
+  $('#appView').hidden = false;
+  $('#userName').textContent = acc.name;
+  $('#userRole').textContent = acc.role === 'admin' ? '管理员' : '浏览者';
+  $('#userAvatar').textContent = acc.name[0];
+  renderNav();
+  renderMeta();
+  go('dashboard');
+};
+
+$('#userMenu').onclick = (e) => {
+  if (e.target.dataset.act === 'logout') {
+    S.user = null;
+    $('#appView').hidden = true;
+    $('#loginView').hidden = false;
+    $('#loginUser').value = '';
+    $('#loginPass').value = '';
+  }
+};
+$('.userbox').onclick = () => $('#userMenu').classList.toggle('show');
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.userbox')) $('#userMenu').classList.remove('show');
+});
+
+$('#navToggle').onclick = () => $('.sidebar').classList.toggle('open');
+
+function renderMeta() {
+  const m = DB.meta;
+  $('#metaMini').innerHTML = `<b>${m.industry_count}</b> 行业 · <b>${m.job_count}</b> 职业 · <b>${m.city_count}</b> 城市`;
+  $('#dataUpdate').innerHTML = `<span class="dot"></span>数据更新：${new Date().toLocaleDateString('zh-CN')}`;
+}
+
 // ================================================================== 看板
 function pageDashboard(c) {
   const q = S.dash;
@@ -197,745 +217,511 @@ function pageDashboard(c) {
     <div class="qbar">
       <div class="qbox">
         <div class="qt"><span class="n">1</span>行业查询</div>
-        <input type="text" id="qInd" placeholder="输入行业编号（如 JZ08）、行业名或关键词（如 劳务、火锅、软件、钢材、宠物、光伏）" value="${esc(q.industry)}">
-        <div class="qmeta" id="mInd">—</div>
+        <input type="text" id="qInd" placeholder="输入行业编号、名称或关键词（如 劳务、火锅、软件）" value="${esc(q.industry)}">
+        <div class="qmeta" id="mInd">输入关键词后点选下方标签</div>
         <div class="chipbar" id="chInd"></div>
+        <div class="qhint" id="hInd"></div>
       </div>
       <div class="qbox">
         <div class="qt"><span class="n">2</span>职业搜索</div>
-        <input type="text" id="qJob" placeholder="输入职位关键词（如 技术员、店长、司机），留空显示本行业全部职位" value="${esc(q.job)}" ${q.ci.size || q.industry ? '' : 'disabled'}>
+        <input type="text" id="qJob" placeholder="输入职位关键词（如 技术员、店长、司机）" value="${esc(q.job)}" ${q.ci.size ? '' : 'disabled'}>
         <div class="qmeta" id="mJob">—</div>
         <div class="chipbar" id="chJob"></div>
+        <div class="qhint" id="hJob"></div>
       </div>
       <div class="qbox">
         <div class="qt"><span class="n">3</span>城市筛选</div>
-        <input type="text" id="qCity" placeholder="输入城市或定位关键词（如 重庆、港口、制造），留空显示全部城市" value="${esc(q.city)}">
+        <input type="text" id="qCity" placeholder="输入城市或定位关键词（如 重庆、港口）" value="${esc(q.city)}">
         <div class="qmeta" id="mCity">—</div>
         <div class="chipbar" id="chCity"></div>
+        <div class="qhint" id="hCity"></div>
       </div>
     </div>
 
-    <div class="statusline" id="statusLine">—</div>
-    <div class="idbox" id="idBox"></div>
-    <div id="dashBody"></div>
+    <div class="statusline" id="statusLine">
+      <span>请选择筛选条件后点击「查询数据」</span>
+      <span class="act">
+        <button class="btn sm" id="bReset">重置全部</button>
+        <button class="btn green sm" id="bQuery">查询数据</button>
+      </span>
+    </div>
+    <div id="dashBody">
+      <div class="empty"><span class="big">📋</span>选择行业、职业和城市筛选条件后点击「查询数据」查看详情<br><small>支持多选：点击多个标签可同时选中</small></div>
+    </div>
   `;
 
-  const deb = debounce(() => loadDash(), 260);
+  const deb = debounce(() => updateChips(), 220);
   $('#qInd').oninput = (e) => { S.dash.industry = e.target.value; deb(); };
   $('#qJob').oninput = (e) => { S.dash.job = e.target.value; deb(); };
   $('#qCity').oninput = (e) => { S.dash.city = e.target.value; deb(); };
-  loadDash();
-}
-
-function buildDashData(q) {
-  const industries = getCollection('industries');
-  const allJobs = getCollection('jobs');
-  const allModes = getCollection('modes');
-  const allCities = D.cities || [];
-  const allRisks = getCollection('city_risks');
-
-  const indQ = (q.industry || '').trim();
-  let candidates = [];
-  let resolvedCode = null;
-  let industry = null;
-
-  // Chip selection takes priority
-  if (q.ci.size > 0) {
-    const code = [...q.ci][0].split('-')[0];
-    const found = industries.find((i) => i['行业编号'] === code);
-    if (found) { resolvedCode = code; industry = found; }
-  }
-
-  // If no chip selected, try to resolve from query
-  if (!resolvedCode && indQ) {
-    const kw = indQ.toLowerCase();
-    // Direct code match
-    const codeMatch = industries.find((i) => i['行业编号'].toLowerCase() === kw);
-    if (codeMatch) {
-      resolvedCode = codeMatch['行业编号'];
-      industry = codeMatch;
-    } else {
-      // Keyword search across multiple fields
-      candidates = industries.filter((i) => {
-        return i['行业编号'].toLowerCase().includes(kw) ||
-               (i['细分行业'] || '').toLowerCase().includes(kw) ||
-               (i['行业门类'] || '').toLowerCase().includes(kw) ||
-               (i['职业标签串'] || '').toLowerCase().includes(kw) ||
-               (i['典型经营主体形态'] || '').toLowerCase().includes(kw) ||
-               (i['典型融资用途'] || '').toLowerCase().includes(kw) ||
-               (i['必备证照资质'] || '').toLowerCase().includes(kw);
-      }).slice(0, 6);
-      candidates = candidates.map((i) => `${i['行业编号']}-${i['细分行业']}`);
-
-      // Auto-resolve if only one candidate
-      if (candidates.length === 1) {
-        const code = candidates[0].split('-')[0];
-        industry = industries.find((i) => i['行业编号'] === code);
-        resolvedCode = industry ? industry['行业编号'] : null;
-        candidates = [];
-      }
-    }
-  }
-
-  const industryLabel = industry ? `${industry['行业编号']}-${industry['细分行业']}` : '';
-
-  // Jobs
-  let jobsAll = [];
-  let jobsHit = 0;
-  let jobsShown = [];
-
-  if (resolvedCode) {
-    jobsAll = allJobs.filter((j) => j['行业编号'] === resolvedCode);
-    const jobQ = (q.job || '').trim().toLowerCase();
-    if (jobQ) {
-      jobsAll = jobsAll.map((j) => {
-        const hit = (j['常见职位'] || '').toLowerCase().includes(jobQ) ||
-                     (j['这个岗位每天干什么'] || '').toLowerCase().includes(jobQ) ||
-                     (j['审核时怎么问'] || '').toLowerCase().includes(jobQ);
-        return { ...j, '命中': hit, '三段式标签': j['常见职位'] };
-      });
-      jobsHit = jobsAll.filter((j) => j['命中']).length;
-    } else {
-      jobsAll = jobsAll.map((j) => ({ ...j, '命中': true, '三段式标签': j['常见职位'] }));
-      jobsHit = jobsAll.length;
-    }
-    jobsShown = jobsAll.filter((j) => j['命中']).slice(0, 10);
-  }
-
-  // Cities
-  const cityQ = (q.city || '').trim().toLowerCase();
-  let matchedCities = allCities;
-  if (cityQ) {
-    matchedCities = allCities.filter((c) =>
-      (c['城市名称'] || '').toLowerCase().includes(cityQ) ||
-      (c['定位标签'] || '').toLowerCase().includes(cityQ)
-    );
-  }
-  if (q.cc.size > 0) {
-    matchedCities = allCities.filter((c) => q.cc.has(c['城市名称']));
-  }
-  const cityHit = matchedCities.length;
-  const cityShown = matchedCities.slice(0, 8);
-
-  // City risks
-  const cityRisks = cityShown.map((c) => {
-    if (resolvedCode) {
-      const risk = allRisks.find((r) => r['行业编号'] === resolvedCode && r['城市'] === c['城市名称']);
-      return {
-        '城市': c['城市名称'],
-        '定位标签': c['定位标签'] || '',
-        '风险层级': risk ? risk['风险层级'] : '',
-        '依据与尽调要点': risk ? risk['依据与尽调要点'] : ''
-      };
-    }
-    return {
-      '城市': c['城市名称'],
-      '定位标签': c['定位标签'] || '',
-      '风险层级': '',
-      '依据与尽调要点': ''
-    };
-  });
-
-  // Modes
-  const modes = resolvedCode ? allModes.filter((m) => m['行业编号'] === resolvedCode) : [];
-
-  // Selected jobs (for chips)
-  const jobsForChips = resolvedCode ? allJobs : [];
-
-  return {
-    status: {
-      industry: resolvedCode ? industry['细分行业'] : (indQ ? `未找到匹配「${indQ}」的行业` : '请输入行业编号或关键词'),
-      job: (q.job || '').trim() || '全部职位',
-      city: (q.city || '').trim() || '全部城市',
-    },
-    resolvedCode,
-    industryLabel,
-    candidateTotal: candidates.length,
-    candidates,
-    industry,
-    jobs: {
-      total: resolvedCode ? allJobs.filter((j) => j['行业编号'] === resolvedCode).length : 0,
-      hit: jobsHit,
-      shownCount: jobsShown.length,
-      shown: jobsShown,
-      all: jobsForChips,
-    },
-    cities: {
-      hit: cityHit,
-      shownCount: cityShown.length,
-      shown: cityRisks,
-    },
-    modes,
+  $('#bReset').onclick = () => {
+    S.dash = { industry: '', job: '', city: '', ci: new Set(), cj: new Set(), cc: new Set(), queried: false };
+    go('dashboard');
   };
+  $('#bQuery').onclick = () => { S.dash.queried = true; renderDash(); };
+  updateChips();
+  if (q.queried) renderDash();
 }
 
-function loadDash() {
-  const d = buildDashData(S.dash);
-  S.dashData = d;
-  renderDash(d);
-}
-
-function renderDash(d) {
+function updateChips() {
   const q = S.dash;
+  const industries = applyEdits('industries', DB.industries);
 
-  $('#statusLine').innerHTML =
-    `行业：<b>${esc(d.status.industry)}</b><span class="sep">｜</span>` +
-    `职业：<b>${esc(d.status.job)}</b><span class="sep">｜</span>` +
-    `城市：<b>${esc(d.status.city)}</b>`;
+  // 行业候选
+  let indCandidates = [];
+  if (q.industry.trim()) {
+    const kw = q.industry.trim().toLowerCase();
+    indCandidates = industries.filter(r =>
+      r['行业编号'].toLowerCase().includes(kw) ||
+      r['细分行业'].toLowerCase().includes(kw) ||
+      r['行业门类'].toLowerCase().includes(kw) ||
+      (r['职业标签串'] || '').toLowerCase().includes(kw)
+    ).slice(0, 8);
+  }
 
-  const ind = d.industry;
-  $('#idBox').innerHTML = ind ? `
-    <div><div class="k">识别编号</div><div class="v code">${esc(ind['行业编号'])}</div></div>
-    <div><div class="k">行业名称</div><div class="v">${esc(ind['细分行业'])}</div></div>
-    <div><div class="k">行业门类</div><div class="v">${esc(ind['行业门类'])}</div></div>
-    <div><div class="k">职业 / 经营模式 / 城市</div><div class="v">${d.jobs.total} / ${d.modes.length} / ${d.cities.shownCount}</div></div>
-  ` : `<div><div class="k">识别编号</div><div class="v" style="color:#94a3b8">未定位</div></div>
-      <div><div class="k">提示</div><div class="v" style="font-size:13px;font-weight:400;color:#475569">
-        ${esc(d.status.industry)}</div></div>`;
+  // 行业提示词
+  if (q.industry.trim() && !indCandidates.length) {
+    $('#hInd').innerHTML = '未找到匹配行业，试试其他关键词如：建筑、餐饮、物流、IT';
+  } else if (indCandidates.length) {
+    $('#hInd').innerHTML = `命中 <b>${indCandidates.length}</b> 个行业，点击标签可多选`;
+  } else {
+    $('#hInd').innerHTML = '输入关键词后点选下方标签锁定行业（支持多选）';
+  }
 
-  // ① 行业候选 chips
-  $('#mInd').innerHTML = d.resolvedCode
-    ? `已定位 <b>${esc(d.industryLabel)}</b>`
-    : (d.candidateTotal ? `命中 <b>${d.candidateTotal}</b> 条${d.candidateTotal > 6 ? '（显示前 6）' : ''}，点选下方标签锁定` : '无命中');
-  $('#chInd').innerHTML = d.candidates.map((cb) => {
-    const code = cb.split('-')[0];
-    const on = code === d.resolvedCode;
-    return `<span class="chip${on ? ' on' : ''}" data-code="${esc(code)}" data-label="${esc(cb)}">${esc(cb)}</span>`;
+  $('#mInd').innerHTML = q.ci.size ? `已选 <b>${q.ci.size}</b> 个行业` : (indCandidates.length ? `命中 <b>${indCandidates.length}</b> 个行业` : '输入关键词搜索');
+  $('#chInd').innerHTML = indCandidates.map(r => {
+    const on = q.ci.has(r['行业编号']);
+    return `<span class="chip${on ? ' on' : ''}" data-code="${esc(r['行业编号'])}">${esc(r['行业编号'])} ${esc(r['细分行业'])}</span>`;
   }).join('') || '<span class="hint">—</span>';
-  $$('#chInd .chip').forEach((el) => {
+  $$('#chInd .chip').forEach(el => {
     el.onclick = () => {
       const code = el.dataset.code;
       if (q.ci.has(code)) q.ci.delete(code); else q.ci.add(code);
-      [...q.ci].forEach((x) => { if (x !== code) q.ci.delete(x); });
-      q.industry = el.dataset.label;
-      $('#qInd').value = q.industry;
-      loadDash();
+      updateChips();
     };
   });
 
-  // ② 职业 chips
-  const jq = $('#qJob');
-  jq.disabled = !d.resolvedCode;
-  const allJobsForChips = d.jobs.all || [];
-  $('#mJob').innerHTML = d.resolvedCode
-    ? `本行业 <b>${d.jobs.total}</b> 个职位｜命中 <b>${d.jobs.hit}</b>｜显示 <b>${d.jobs.shownCount}</b>${d.jobs.shownCount > 10 ? '（看板最多 10）' : ''}`
+  // 职业候选
+  const selectedInds = q.ci.size ? industries.filter(r => q.ci.has(r['行业编号'])) : [];
+  const jobPool = q.ci.size ? DB.jobs.filter(j => q.ci.has(j['行业编号'])) : [];
+  let jobCandidates = [];
+  if (q.job.trim() && jobPool.length) {
+    const kw = q.job.trim().toLowerCase();
+    jobCandidates = jobPool.filter(j => j['常见职位'].toLowerCase().includes(kw)).slice(0, 12);
+  } else if (jobPool.length) {
+    jobCandidates = jobPool.slice(0, 12);
+  }
+
+  $('#qJob').disabled = !q.ci.size;
+  $('#mJob').innerHTML = q.ci.size
+    ? `本行业 <b>${jobPool.length}</b> 个职位${q.cj.size ? ` · 已选 <b>${q.cj.size}</b>` : ''}`
     : '请先选定行业';
-  $('#chJob').innerHTML = d.resolvedCode
-    ? allJobsForChips.map((r) => {
-        const on = q.cj.has(r['常见职位']);
-        const dim = !r['命中'];
-        return `<span class="chip${on ? ' on' : ''}${dim ? ' dim' : ''}" data-j="${esc(r['常见职位'])}">${esc(r['常见职位'])}</span>`;
-      }).join('') || '<span class="hint">该行业暂无职位</span>'
-    : '<span class="hint">—</span>';
-  $$('#chJob .chip').forEach((el) => {
+  $('#hJob').innerHTML = q.ci.size ? `共 ${jobPool.length} 个职位，点击标签可多选` : '先选择行业后可搜索职业';
+  $('#chJob').innerHTML = jobCandidates.map(j => {
+    const on = q.cj.has(j['常见职位']);
+    return `<span class="chip${on ? ' on' : ''}" data-j="${esc(j['常见职位'])}">${esc(j['常见职位'])}</span>`;
+  }).join('') || '<span class="hint">—</span>';
+  $$('#chJob .chip').forEach(el => {
     el.onclick = () => {
       const jn = el.dataset.j;
       if (q.cj.has(jn)) q.cj.delete(jn); else q.cj.add(jn);
-      loadDash();
+      updateChips();
     };
   });
 
-  // ③ 城市 chips
-  const cityNames = (D.cities || []).map((c) => c['城市名称']);
-  const cityQ = (q.city || '').trim().toLowerCase();
-  const cityMatched = cityQ
-    ? (D.cities || []).filter((c) => (c['城市名称'] || '').toLowerCase().includes(cityQ) || (c['定位标签'] || '').toLowerCase().includes(cityQ))
-    : (D.cities || []);
-  $('#mCity').innerHTML = `命中 <b>${cityMatched.length}</b> 个城市｜显示 <b>${d.cities.shownCount}</b>${d.cities.shownCount > 8 ? '（看板最多 8）' : ''}`;
-  $('#chCity').innerHTML = cityMatched.map((c) => {
-    const on = q.cc.has(c['城市名称']);
-    return `<span class="chip${on ? ' on' : ''}" data-c="${esc(c['城市名称'])}" title="${esc(c['定位标签'] || '')}">${esc(c['城市名称'])}</span>`;
+  // 城市候选
+  const cities = DB.cities;
+  let cityCandidates = [];
+  if (q.city.trim()) {
+    const kw = q.city.trim().toLowerCase();
+    cityCandidates = cities.filter(r =>
+      r['城市名称'].toLowerCase().includes(kw) ||
+      (r['定位标签'] || '').toLowerCase().includes(kw)
+    );
+  } else {
+    cityCandidates = cities;
+  }
+
+  $('#mCity').innerHTML = q.cc.size ? `已选 <b>${q.cc.size}</b> 个城市` : `共 <b>${cities.length}</b> 个城市`;
+  $('#hCity').innerHTML = '点击城市标签可多选，不选则默认全部';
+  $('#chCity').innerHTML = cityCandidates.map(r => {
+    const on = q.cc.has(r['城市名称']);
+    return `<span class="chip${on ? ' on' : ''}" data-c="${esc(r['城市名称'])}" title="${esc(r['定位标签'] || '')}">${esc(r['城市名称'])}</span>`;
   }).join('');
-  $$('#chCity .chip').forEach((el) => {
+  $$('#chCity .chip').forEach(el => {
     el.onclick = () => {
       const cn = el.dataset.c;
       if (q.cc.has(cn)) q.cc.delete(cn); else q.cc.add(cn);
-      loadDash();
+      updateChips();
     };
   });
+}
 
-  // 主体区块
-  $('#dashBody').innerHTML = sec01(d) + sec02(d) + sec03(d) + sec04(d) + sec05(d);
-  bindEdits($('#dashBody'));
-  bindModeToggles($('#dashBody'));
+function renderDash() {
+  const q = S.dash;
+  const industries = applyEdits('industries', DB.industries);
+  const jobs = applyEdits('jobs', DB.jobs);
+  const modes = applyEdits('modes', DB.modes);
+  const risks = applyEdits('city_risks', DB.city_risks);
+
+  const selectedCodes = q.ci.size ? [...q.ci] : [];
+  const indRecords = selectedCodes.length ? industries.filter(r => q.ci.has(r['行业编号'])) : [];
+  const selectedJobs = q.cj.size ? [...q.cj] : [];
+  const selectedCities = q.cc.size ? [...q.cc] : [];
+  const allCities = DB.cities.map(c => c['城市名称']);
+
+  // 状态栏
+  const indLabel = indRecords.length ? indRecords.map(r => r['细分行业']).join('、') : '全部';
+  const jobLabel = selectedJobs.length ? selectedJobs.join('、') : '全部';
+  const cityLabel = selectedCities.length ? selectedCities.join('、') : '全部';
+  $('#statusLine').innerHTML =
+    `<span>行业：<b>${esc(indLabel)}</b><span class="sep">｜</span>` +
+    `职业：<b>${esc(jobLabel)}</b><span class="sep">｜</span>` +
+    `城市：<b>${esc(cityLabel)}</b></span>` +
+    `<span class="act"><button class="btn sm" id="bReset2">重置</button></span>`;
+  $('#bReset2').onclick = () => {
+    S.dash = { industry: '', job: '', city: '', ci: new Set(), cj: new Set(), cc: new Set(), queried: false };
+    go('dashboard');
+  };
+
+  let html = '';
+
+  // 识别编号
+  if (indRecords.length === 1) {
+    const ind = indRecords[0];
+    const jobCount = jobs.filter(j => j['行业编号'] === ind['行业编号']).length;
+    const modeCount = modes.filter(m => m['行业编号'] === ind['行业编号']).length;
+    html += `<div class="idbox fade-in">
+      <div><div class="k">识别编号</div><div class="v code">${esc(ind['行业编号'])}</div></div>
+      <div><div class="k">行业名称</div><div class="v">${esc(ind['细分行业'])}</div></div>
+      <div><div class="k">行业门类</div><div class="v">${esc(ind['行业门类'])}</div></div>
+      <div><div class="k">职业 / 模式 / 城市</div><div class="v">${jobCount} / ${modeCount} / ${allCities.length}</div></div>
+    </div>`;
+  } else if (indRecords.length > 1) {
+    html += `<div class="idbox fade-in">
+      <div><div class="k">已选行业</div><div class="v">${indRecords.length} 个</div></div>
+      <div><div class="k">行业列表</div><div class="v" style="font-size:13px;font-weight:400">${indRecords.map(r => esc(r['行业编号'] + ' ' + r['细分行业'])).join('、')}</div></div>
+    </div>`;
+  }
+
+  // 01 行业档案
+  if (indRecords.length) {
+    html += sec01(indRecords, industries);
+  }
+
+  // 02 经营模式
+  if (indRecords.length || selectedCodes.length) {
+    const modeRecords = selectedCodes.length ? modes.filter(m => q.ci.has(m['行业编号'])) : [];
+    html += sec02(modeRecords);
+  }
+
+  // 03 前景利润淡旺季
+  if (indRecords.length) {
+    html += sec03(indRecords);
+  }
+
+  // 04 在职客户岗位核实
+  if (selectedCodes.length) {
+    let jobRecords;
+    if (selectedJobs.length) {
+      jobRecords = jobs.filter(j => q.ci.has(j['行业编号']) && q.cj.has(j['常见职位']));
+    } else {
+      jobRecords = jobs.filter(j => q.ci.has(j['行业编号']));
+    }
+    html += sec04(jobRecords, selectedJobs);
+
+    // 06 薪资趋势（在审核信息下面）
+    if (selectedJobs.length) {
+      html += sec06(selectedCodes.length === 1 ? selectedCodes[0] : '', selectedJobs);
+    } else if (jobRecords.length) {
+      html += sec06(selectedCodes.length === 1 ? selectedCodes[0] : '', jobRecords.slice(0, 3).map(j => j['常见职位']));
+    }
+  }
+
+  // 05 城市风险分级
+  if (selectedCodes.length || selectedCities.length) {
+    let riskRecords;
+    if (selectedCodes.length && selectedCities.length) {
+      riskRecords = risks.filter(r => q.ci.has(r['行业编号']) && q.cc.has(r['城市']));
+    } else if (selectedCodes.length) {
+      riskRecords = risks.filter(r => q.ci.has(r['行业编号']));
+    } else {
+      riskRecords = risks.filter(r => q.cc.has(r['城市']));
+    }
+    html += sec05(riskRecords, selectedCodes.length > 0, selectedCities);
+  }
+
+  if (!html) {
+    html = '<div class="empty"><span class="big">📋</span>请至少选择一个行业或城市后查询数据</div>';
+  }
+
+  $('#dashBody').innerHTML = html;
+  bindGroupToggles($('#dashBody'));
 }
 
 function cardHead(no, title, sub) {
-  return `<div class="card-hd"><h3>${no ? `<span class="no">${no}</span>` : ''}${esc(title)}</h3>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
+  return `<div class="card-hd"><h3><span class="no">${no}</span>${esc(title)}</h3>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
 }
 
-function kvRows(rec, fields, collection, recKey) {
-  const canEd = S.user && S.user.can_edit;
-  return fields.map((f) => {
-    const v = rec[f] == null ? '' : rec[f];
-    return `<tr><th>${esc(lb(f))}</th><td>${cellHtml(collection, recKey, f, v, canEd)}</td></tr>`;
-  }).join('');
+function sec01(inds, allInds) {
+  let body = '';
+  for (const ind of inds) {
+    const k = ind['行业编号'];
+    body += `<div class="grp">
+      <div class="grp-hd"><span class="idx">◆</span>${esc(ind['细分行业'])}<span class="rt">${esc(ind['行业门类'])} · ${esc(k)}</span></div>
+      <div class="grp-bd"><table class="kv">${F.industries_01.map(f => {
+        const v = ind[f] || '';
+        return `<tr><th>${esc(lb(f))}</th><td>${v ? nl2br(v) : '<span style="color:#cbd5e1">—</span>'}</td></tr>`;
+      }).join('')}</table></div></div>`;
+  }
+  return `<div class="card fade-in">${cardHead('01', '行业档案', `${inds.length} 个行业`)}
+    <div class="card-bd"><div class="grp-list">${body}</div></div></div>`;
 }
 
-function cellHtml(collection, recKey, field, value, canEdit) {
-  const empty = !String(value || '').trim() || String(value).trim() === '—';
-  const txt = empty ? '<span style="color:#94a3b8">—</span>' : nl2br(value);
-  if (!canEdit) return `<div class="txt">${txt}</div>`;
-  return `<div class="cell-ed"><div class="txt">${txt}</div>
-    <button class="btn sm ed-btn" data-c="${esc(collection)}" data-k="${esc(recKey)}" data-f="${esc(field)}" title="编辑此字段">✎</button></div>`;
-}
-
-function sec01(d) {
-  if (!d.industry) return '';
-  const k = d.industry['行业编号'];
-  return `<div class="card">${cardHead('01', '行业档案', `${esc(d.industry['行业门类'])} · ${esc(k)}`)}
-    <div class="card-bd tight"><table class="kv">${kvRows(d.industry, F.industries_01, 'industries', k)}</table></div></div>`;
-}
-
-function sec02(d) {
-  if (!d.resolvedCode) return '';
-  const modes = d.modes || [];
-  let bd;
+function sec02(modes) {
+  if (!modes.length) return '';
+  let body;
   if (!modes.length) {
-    bd = '<div class="empty"><span class="big">🧩</span>该行业暂无经营模式条目</div>';
+    body = '<div class="empty"><span class="big">🧩</span>该行业暂无经营模式条目</div>';
   } else {
-    bd = `<div class="grp-list">${modes.map((m, i) => {
-      const k = m['行业编号'] + '|' + m['细分模式'];
+    body = `<div class="grp-list">${modes.map((m, i) => {
       return `<div class="grp">
         <div class="grp-hd"><span class="idx">◆</span>${esc(m['细分模式'])}
-          <span class="rt">第 ${i + 1} / ${modes.length} 条</span></div>
-        <div class="grp-bd"><table class="kv">${kvRows(m, F.modes_02, 'modes', k)}</table></div></div>`;
+          <span class="rt">第 ${i + 1} / ${modes.length} 条</span><span class="toggle">▾</span></div>
+        <div class="grp-bd"><table class="kv">${F.modes_02.map(f => {
+          const v = m[f] || '';
+          return `<tr><th>${esc(lb(f))}</th><td>${v ? nl2br(v) : '<span style="color:#cbd5e1">—</span>'}</td></tr>`;
+        }).join('')}</table></div></div>`;
     }).join('')}</div>`;
   }
-  return `<div class="card">${cardHead('02', '经营模式', `共 ${modes.length} 条${modes.length > 1 ? '（按 ◆模式名 分组）' : ''}`)}
-    <div class="card-bd">${bd}</div></div>`;
+  return `<div class="card fade-in">${cardHead('02', '经营模式', `共 ${modes.length} 条`)}
+    <div class="card-bd">${body}</div></div>`;
 }
 
-function sec03(d) {
-  if (!d.industry) return '';
-  const k = d.industry['行业编号'];
-  const ind = d.industry;
-  const pair = (f1, f2) => `<tr><th>${esc(lb(f1))}</th>
-    <td style="width:44%">${cellHtml('industries', k, f1, ind[f1], S.user && S.user.can_edit)}</td>
-    <th style="width:96px">${esc(lb(f2))}</th>
-    <td>${cellHtml('industries', k, f2, ind[f2], S.user && S.user.can_edit)}</td></tr>`;
-  const single = (f) => `<tr><th>${esc(lb(f))}</th><td colspan="3">${cellHtml('industries', k, f, ind[f], S.user && S.user.can_edit)}</td></tr>`;
-  return `<div class="card">${cardHead('03', '前景 、利润 、淡旺季', '含毛利率 / 净利率 / 旺淡季')}
-    <div class="card-bd tight"><table class="kv">
-      ${single('前景趋势判断')}
-      ${pair('毛利率区间', '净利率区间')}
-      ${pair('旺季月份', '淡季月份')}
-      ${single('季节性资金缺口高峰')}${single('主要经营风险')}${single('政策与外部驱动')}
-    </table></div></div>`;
-}
-
-function sec04(d) {
-  if (!d.resolvedCode) return '';
-  const shown = d.jobs.shown || [];
-  let bd;
-  if (!shown.length) {
-    bd = `<div class="empty"><span class="big">👥</span>${esc(d.status.job)}</div>`;
-  } else {
-    bd = `<div class="grp-list">${shown.map((j, i) => {
-      const k = j['行业编号'] + '|' + j['常见职位'];
-      return `<div class="grp">
-        <div class="grp-hd"><span class="idx">◆</span>${esc(j['常见职位'])}
-          <span class="rt">第 ${i + 1} / ${shown.length} 条${d.jobs.shownCount > 10 ? `（本行业命中 ${d.jobs.shownCount} 个，看板显示前 10）` : ''}</span></div>
-        <div class="grp-bd"><table class="kv">${kvRows(j, F.jobs_04, 'jobs', k)}</table></div></div>`;
-    }).join('')}</div>`;
+function sec03(inds) {
+  let body = '';
+  for (const ind of inds) {
+    body += `<div class="grp">
+      <div class="grp-hd"><span class="idx">◆</span>${esc(ind['细分行业'])}<span class="toggle">▾</span></div>
+      <div class="grp-bd"><table class="kv">
+        <tr><th>${esc(lb('前景趋势判断'))}</th><td colspan="3">${ind['前景趋势判断'] ? nl2br(ind['前景趋势判断']) : '<span style="color:#cbd5e1">—</span>'}</td></tr>
+        <tr><th>${esc(lb('毛利率区间'))}</th><td style="width:40%">${ind['毛利率区间'] ? nl2br(ind['毛利率区间']) : '<span style="color:#cbd5e1">—</span>'}</td>
+          <th style="width:100px">${esc(lb('净利率区间'))}</th><td>${ind['净利率区间'] ? nl2br(ind['净利率区间']) : '<span style="color:#cbd5e1">—</span>'}</td></tr>
+        <tr><th>${esc(lb('旺季月份'))}</th><td>${ind['旺季月份'] ? nl2br(ind['旺季月份']) : '<span style="color:#cbd5e1">—</span>'}</td>
+          <th>${esc(lb('淡季月份'))}</th><td>${ind['淡季月份'] ? nl2br(ind['淡季月份']) : '<span style="color:#cbd5e1">—</span>'}</td></tr>
+        <tr><th>${esc(lb('季节性资金缺口高峰'))}</th><td colspan="3">${ind['季节性资金缺口高峰'] ? nl2br(ind['季节性资金缺口高峰']) : '<span style="color:#cbd5e1">—</span>'}</td></tr>
+        <tr><th>${esc(lb('主要经营风险'))}</th><td colspan="3">${ind['主要经营风险'] ? nl2br(ind['主要经营风险']) : '<span style="color:#cbd5e1">—</span>'}</td></tr>
+        <tr><th>${esc(lb('政策与外部驱动'))}</th><td colspan="3">${ind['政策与外部驱动'] ? nl2br(ind['政策与外部驱动']) : '<span style="color:#cbd5e1">—</span>'}</td></tr>
+      </table></div></div>`;
   }
-  return `<div class="card">${cardHead('04', '在职客户岗位核实', `本行业 ${d.jobs.total} 个职位 · 显示 ${shown.length} 个`)}
-    <div class="card-bd">${bd}</div></div>`;
+  return `<div class="card fade-in">${cardHead('03', '前景、利润、淡旺季', '含毛利率/净利率/旺淡季')}
+    <div class="card-bd"><div class="grp-list">${body}</div></div></div>`;
 }
 
-function sec05(d) {
-  const rows = d.cities.shown || [];
-  let bd;
+function sec04(jobs, selectedJobs) {
+  if (!jobs.length) {
+    return `<div class="card fade-in">${cardHead('04', '在职客户岗位核实', '无匹配职位')}
+      <div class="card-bd"><div class="empty"><span class="big">👥</span>未选中职业或该行业无匹配职位</div></div></div>`;
+  }
+  const body = `<div class="grp-list">${jobs.map((j, i) => {
+    return `<div class="grp">
+      <div class="grp-hd"><span class="idx">◆</span>${esc(j['常见职位'])}
+        <span class="rt">第 ${i + 1} / ${jobs.length} 条</span><span class="toggle">▾</span></div>
+      <div class="grp-bd"><table class="kv">${F.jobs_04.map(f => {
+        const v = j[f] || '';
+        return `<tr><th>${esc(lb(f))}</th><td>${v ? nl2br(v) : '<span style="color:#cbd5e1">—</span>'}</td></tr>`;
+      }).join('')}</table></div></div>`;
+  }).join('')}</div>`;
+  return `<div class="card fade-in">${cardHead('04', '在职客户岗位核实', `显示 ${jobs.length} 个职位`)}
+    <div class="card-bd">${body}</div></div>`;
+}
+
+function sec05(rows, hasInd, selectedCities) {
   if (!rows.length) {
-    bd = '<div class="empty"><span class="big">🏙</span>无匹配城市</div>';
-  } else {
-    bd = `<div class="tbl-wrap"><table class="risk-tbl">
-      <thead><tr><th>城市</th><th>风险层级</th><th>定级依据与尽调要点</th></tr></thead>
-      <tbody>${rows.map((r) => `<tr>
-        <td class="city">${esc(r['城市'])}<span class="loc">${esc(r['定位标签'] || '')}</span></td>
-        <td class="lvcell">${d.resolvedCode
-          ? `<span class="lv ${lvClass(r['风险层级'])}">${esc(r['风险层级'] || '—')}</span>`
-          : '<span style="color:#94a3b8">—</span>'}</td>
-        <td class="basis">${d.resolvedCode ? nl2br(r['依据与尽调要点']) : '<span style="color:#94a3b8">请先选定行业</span>'}</td>
-      </tr>`).join('')}</tbody></table></div>`;
+    return `<div class="card fade-in">${cardHead('05', '城市风险分级（A 低 → E 高）', '无匹配')}
+      <div class="card-bd"><div class="empty"><span class="big">🏙</span>无匹配城市风险数据</div></div></div>`;
   }
-  return `<div class="card">${cardHead('05', '城市风险分级（A 低 → E 高）',
-    `${rows.length} 个城市${d.resolvedCode ? '' : ' · 未选行业'}`)}
-    <div class="card-bd">${bd}
+  const body = `<div class="tbl-wrap"><table class="risk-tbl">
+    <thead><tr><th>城市</th><th>风险层级</th><th>定级依据与尽调要点</th></tr></thead>
+    <tbody>${rows.map(r => `<tr>
+      <td class="city">${esc(r['城市'])}</td>
+      <td class="lvcell">${hasInd ? `<span class="lv ${lvClass(r['风险层级'])}">${esc(r['风险层级'] || '—')}</span>` : '<span style="color:#cbd5e1">—</span>'}</td>
+      <td class="basis">${hasInd ? nl2br(r['依据与尽调要点']) : '<span style="color:#cbd5e1">请先选定行业</span>'}</td>
+    </tr>`).join('')}</tbody></table></div>`;
+  return `<div class="card fade-in">${cardHead('05', '城市风险分级（A 低 → E 高）', `${rows.length} 条记录`)}
+    <div class="card-bd">${body}
       <div class="legend">
         <span><i style="background:var(--lv-a-bg);border:1px solid var(--lv-a)"></i>A 低</span>
-        <span><i style="background:var(--lv-bc-bg);border:1px solid var(--lv-bc)"></i>B / B-C 中低</span>
+        <span><i style="background:var(--lv-bc-bg);border:1px solid var(--lv-bc)"></i>B/B-C 中低</span>
         <span><i style="background:var(--lv-c-bg);border:1px solid var(--lv-c)"></i>C 中等</span>
-        <span><i style="background:var(--lv-cd-bg);border:1px solid var(--lv-cd)"></i>C-D 中等偏高</span>
+        <span><i style="background:var(--lv-cd-bg);border:1px solid var(--lv-cd)"></i>C-D 中高</span>
         <span><i style="background:var(--lv-d-bg);border:1px solid var(--lv-d)"></i>D 中高</span>
         <span><i style="background:var(--lv-e-bg);border:1px solid var(--lv-e)"></i>E 高</span>
-        <span style="margin-left:auto">数据口径：各市统计局 2026 年上半年发布数据</span>
       </div>
     </div></div>`;
 }
 
-// ------------------------------------------------------------------ 内联编辑
-function bindEdits(root) {
-  $$('.ed-btn', root).forEach((b) => {
-    b.onclick = () => openEditor(b.dataset.c, b.dataset.k, b.dataset.f);
-  });
-}
+// 06 薪资趋势
+function sec06(indCode, jobNames) {
+  if (!jobNames || !jobNames.length) return '';
+  const cards = jobNames.map(jn => {
+    const key = indCode ? `${indCode}|${jn}` : Object.keys(DB.salary).find(k => k.endsWith('|' + jn));
+    const sd = key ? DB.salary[key] : null;
+    if (!sd) return '';
 
-function openEditor(collection, recKey, field) {
-  const pool = getCollection(collection);
-  const cur = pool.find((r) => keyOf(collection, r) === recKey) || null;
-  const val = cur ? (cur[field] == null ? '' : cur[field]) : '';
-  modal(`编辑 · ${lb(field)}`, `
-    <div class="fld"><span>记录</span><input type="text" value="${esc(recKey)}" disabled></div>
-    <div class="fld"><span>${esc(lb(field))}</span>
-      <textarea id="edVal" rows="10" style="width:100%;padding:10px 13px;border:1px solid var(--c-line);border-radius:6px;line-height:1.75">${esc(val)}</textarea>
-    </div>
-    <p class="hint">修改保存在浏览器本地，原始数据不受影响，可随时还原。</p>
-  `, `<button class="btn" id="edRevert">还原</button>
-      <button class="btn" id="edCancel">取消</button>
-      <button class="btn green" id="edSave">保存</button>`);
-  $('#edCancel').onclick = closeModal;
-  $('#edSave').onclick = () => {
-    const nv = $('#edVal').value;
-    saveEdit(collection, recKey, field, nv);
-    toast('已保存', `字段已更新（保存在浏览器本地）`);
-    closeModal();
-    if (S.page === 'dashboard') loadDash(); else go(S.page);
-  };
-  $('#edRevert').onclick = () => {
-    if (!confirm('确定还原这条记录的全部字段为原始值？')) return;
-    revertRecord(collection, recKey);
-    toast('已还原', '该记录已恢复为原始数据');
-    closeModal();
-    if (S.page === 'dashboard') loadDash(); else go(S.page);
-  };
-  setTimeout(() => $('#edVal').focus(), 40);
-}
+    const trend = sd.trend || {};
+    const years = Object.keys(trend).sort();
+    if (!years.length) return '';
+    const maxVal = Math.max(...years.map(y => trend[y].max));
+    const minVal = Math.min(...years.map(y => trend[y].min));
 
-function bindModeToggles(root) {
-  $$('.grp-hd', root).forEach((h) => {
-    h.style.cursor = 'pointer';
-    h.onclick = (e) => {
-      if (e.target.closest('.ed-btn')) return;
-      const bd = h.nextElementSibling;
-      const hide = bd.style.display === 'none';
-      bd.style.display = hide ? '' : 'none';
-      h.style.opacity = hide ? '1' : '.62';
-    };
-  });
-}
+    const bars = years.map(y => {
+      const d = trend[y];
+      const h = (d.median / maxVal * 100).toFixed(1);
+      const isLatest = y === years[years.length - 1];
+      return `<div class="salary-bar">
+        <div class="bar-val">${(d.median / 1000).toFixed(1)}k</div>
+        <div class="bar-fill" style="height:${h}%;${isLatest ? 'background:linear-gradient(180deg,#60a5fa,#2563eb)' : ''}"></div>
+        <div class="bar-lbl">${y}</div>
+      </div>`;
+    }).join('');
 
-function debounce(fn, ms) {
-  let t; return function () { clearTimeout(t); const a = arguments; t = setTimeout(() => fn.apply(this, a), ms); };
-}
+    const firstYear = trend[years[0]];
+    const lastYear = trend[years[years.length - 1]];
+    const growth = firstYear && lastYear ? ((lastYear.median - firstYear.median) / firstYear.median * 100).toFixed(1) : 0;
 
-// ================================================================== 通用数据表
-function dataTablePage(c, cfg) {
-  c.innerHTML = `
-    <div class="card">
-      ${cardHead(cfg.no || '', cfg.title, cfg.sub || '')}
-      <div class="card-bd">
-        <div class="toolbar" id="tb"></div>
-        <div class="tbl-wrap" id="tw"></div>
-        <div class="pager" id="pg"></div>
+    const demandTag = sd.demand === '高' ? 'hot' : sd.demand === '中' ? 'warm' : 'cool';
+    const demandText = sd.demand === '高' ? '需求旺盛' : sd.demand === '中' ? '需求稳定' : '需求一般';
+
+    return `<div class="salary-card fade-in">
+      <div class="card-hd"><h3><span class="no">06</span>${esc(jn)} · 薪资趋势分析</h3><div class="sub">2020-2026 年度变化</div></div>
+      <div class="salary-grid">
+        <div class="salary-stat"><div class="sl">月薪范围</div><div class="sv">${(sd.monthly_min/1000).toFixed(1)}k<small> - ${(sd.monthly_max/1000).toFixed(1)}k</small></div></div>
+        <div class="salary-stat"><div class="sl">月薪中位</div><div class="sv">${(sd.monthly_median/1000).toFixed(1)}k</div></div>
+        <div class="salary-stat"><div class="sl">年薪范围</div><div class="sv">${(sd.annual_min/10000).toFixed(1)}w<small> - ${(sd.annual_max/10000).toFixed(1)}w</small></div></div>
+        <div class="salary-stat"><div class="sl">7年增长</div><div class="sv">${growth > 0 ? '+' : ''}${growth}%</div><div class="delta ${growth > 0 ? 'up' : 'down'}">${growth > 0 ? '↑' : '↓'} ${Math.abs(growth)}%</div></div>
+      </div>
+      <div class="salary-chart">
+        <div class="chart-title">📊 年度薪资趋势（月薪中位数）</div>
+        <div class="salary-bars">${bars}</div>
+      </div>
+      <div class="salary-demand">
+        <span class="dl">市场需求：</span>
+        <span class="tag ${demandTag}">${demandText}</span>
+        <span class="dl" style="margin-left:12px">年均增长率：</span>
+        <span class="tag blue">${esc(sd.growth_rate)}</span>
+        <span class="dl" style="margin-left:auto;font-size:11px;color:var(--c-tx-3)">数据基于行业基准模型估算，实际薪资受城市、经验、企业规模影响</span>
       </div>
     </div>`;
-  const st = { page: 1, size: cfg.size || 50, q: '', total: 0 };
-  const tb = $('#tb');
+  }).join('');
 
-  tb.innerHTML = `
-    <input type="text" id="fQ" placeholder="关键词全文检索…">
-    <span class="sp"></span>
-    <span class="hint" id="cnt"></span>
-    <button class="btn" id="bExp">⬇ 导出本页数据</button>
-  `;
-
-  const allData = getCollection(cfg.name);
-
-  const reload = () => {
-    const kw = st.q.trim().toLowerCase();
-    let filtered = allData;
-    if (kw) {
-      filtered = allData.filter((r) => {
-        return Object.values(r).some((v) => String(v || '').toLowerCase().includes(kw));
-      });
-    }
-    st.total = filtered.length;
-    $('#cnt').textContent = `共 ${st.total} 条`;
-    const start = (st.page - 1) * st.size;
-    const rows = filtered.slice(start, start + st.size);
-    renderRows(rows);
-    renderPager();
-  };
-
-  function renderRows(rows) {
-    if (!rows.length) { $('#tw').innerHTML = '<div class="empty"><span class="big">🗂</span>没有匹配的记录</div>'; return; }
-    const cols = cfg.columns;
-    $('#tw').innerHTML = `<table class="tbl"><thead><tr>${cols.map((x) => `<th>${esc(x.t)}</th>`).join('')}
-      ${S.user.can_edit ? '<th>操作</th>' : ''}</tr></thead>
-      <tbody>${rows.map((r) => {
-        const k = keyOf(cfg.name, r);
-        return `<tr>${cols.map((x) => {
-          const v = x.f ? x.f(r) : r[x.k];
-          if (x.cls === 'lv') return `<td><span class="lv ${lvClass(v)}">${esc(v || '—')}</span></td>`;
-          if (x.cls === 'code') return `<td class="code">${esc(v || '')}</td>`;
-          return `<td class="${x.wrap === false ? '' : 'wrap'}">${x.raw ? v : nl2br(v)}</td>`;
-        }).join('')}
-        ${S.user.can_edit ? `<td class="rowact">
-          <button class="btn sm act-ed" data-k="${esc(k)}">编辑</button>
-        </td>` : ''}</tr>`;
-      }).join('')}</tbody></table>`;
-    $$('.act-ed', $('#tw')).forEach((b) => {
-      b.onclick = () => openRecordEditor(cfg, b.dataset.k, allData.find((r) => keyOf(cfg.name, r) === b.dataset.k));
-    });
-  }
-
-  function renderPager() {
-    const pages = Math.max(1, Math.ceil(st.total / st.size));
-    $('#pg').innerHTML = `
-      <button class="btn sm" id="pPrev" ${st.page <= 1 ? 'disabled' : ''}>上一页</button>
-      <span>第 ${st.page} / ${pages} 页（${st.total} 条）</span>
-      <button class="btn sm" id="pNext" ${st.page >= pages ? 'disabled' : ''}>下一页</button>
-      <select id="pSize">${[20, 50, 100, 200, 500].map((n) => `<option value="${n}"${n === st.size ? ' selected' : ''}>${n} 条/页</option>`).join('')}</select>`;
-    $('#pPrev').onclick = () => { st.page--; reload(); };
-    $('#pNext').onclick = () => { st.page++; reload(); };
-    $('#pSize').onchange = (e) => { st.size = Number(e.target.value); st.page = 1; reload(); };
-  }
-
-  $('#fQ').oninput = debounce((e) => { st.q = e.target.value.trim(); st.page = 1; reload(); }, 280);
-  $('#bExp').onclick = () => downloadJson(cfg.name);
-  reload();
+  return cards || '';
 }
 
-function openRecordEditor(cfg, recKey, rec) {
-  const isNew = !rec;
-  const fields = cfg.editFields || cfg.columns.filter((x) => !x.noEdit).map((x) => x.k);
-  const tpl = rec || {};
-  const body = `<div class="form-grid">${fields.map((f) => {
-    const v = tpl[f] == null ? '' : tpl[f];
-    const long = String(v).length > 40 || ['依据与尽调要点', '这个岗位每天干什么', '审核时怎么问', '能查到哪些证据',
-      '真干过的人怎么答', '没干过的破绽', '主要经营风险', '政策与外部驱动', '前景趋势判断', '季节性资金缺口高峰',
-      '运作方式', '盈利逻辑', '上下游与结算回款方式', '授信关注要点', '典型经营主体形态', '必备证照资质',
-      '订单与客户来源', '定位标签', '职业标签串'].includes(f);
-    return `<div class="fld${long ? ' full' : ''}">
-      <span>${esc(lb(f))}</span>
-      ${long
-        ? `<textarea rows="4" data-f="${esc(f)}" style="width:100%;padding:9px 12px;border:1px solid var(--c-line);border-radius:6px;line-height:1.7">${esc(v)}</textarea>`
-        : `<input type="text" data-f="${esc(f)}" value="${esc(v)}" style="width:100%;padding:8px 11px;border:1px solid var(--c-line);border-radius:6px">`}
-    </div>`;
-  }).join('')}</div>
-  <p class="hint">修改保存在浏览器本地存储中。</p>`;
-  modal((isNew ? '新增' : '编辑') + ' · ' + cfg.title, body,
-    `<button class="btn" id="rCancel">取消</button><button class="btn green" id="rSave">保存</button>`, { wide: true });
-  $('#rCancel').onclick = closeModal;
-  $('#rSave').onclick = () => {
-    const rec2 = {};
-    $$('#modalBody [data-f]').forEach((el) => { rec2[el.dataset.f] = el.value; });
-    if (isNew) {
-      const k = keyOf(cfg.name, rec2);
-      saveEdit(cfg.name, k, '__new__', rec2);
-      toast('已新增', k);
-    } else {
-      const changes = {};
-      for (const [f, v] of Object.entries(rec2)) if (String(v) !== String(tpl[f] == null ? '' : tpl[f])) changes[f] = v;
-      if (!Object.keys(changes).length) { toast('无变更', '内容没有修改'); closeModal(); return; }
-      for (const [f, v] of Object.entries(changes)) saveEdit(cfg.name, recKey, f, v);
-      toast('已保存', `更新 ${Object.keys(changes).length} 个字段`);
-    }
-    closeModal();
-    go(S.page);
-  };
-}
-
-function downloadJson(name) {
-  const data = name === 'all' ? D : (getCollection(name) || []);
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `xwk_${name}_${Date.now()}.json`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  toast('已开始下载', a.download);
-}
-
-// ================================================================== 各管理页
-const COL_INDUSTRY = { t: '行业编号', k: '行业编号', cls: 'code', wrap: false };
-
-function pageIndustries(c) {
-  return dataTablePage(c, {
-    name: 'industries', no: '01', title: '行业管理（行业档案 + 前景利润淡旺季）',
-    sub: `共 ${S.meta ? S.meta.industry_count : 0} 个细分行业`,
-    columns: [
-      COL_INDUSTRY,
-      { t: '行业门类', k: '行业门类', wrap: false },
-      { t: '细分行业', k: '细分行业', wrap: false },
-      { t: '典型经营主体形态', k: '典型经营主体形态' },
-      { t: '必备证照资质', k: '必备证照资质' },
-      { t: '常见经营规模', k: '常见经营规模' },
-      { t: '订单与客户来源', k: '订单与客户来源' },
-      { t: '典型融资用途', k: '典型融资用途' },
-      { t: '前景趋势判断', k: '前景趋势判断' },
-      { t: '毛利率', k: '毛利率区间', wrap: false },
-      { t: '净利率', k: '净利率区间', wrap: false },
-      { t: '旺季', k: '旺季月份' }, { t: '淡季', k: '淡季月份' },
-      { t: '季节性资金缺口高峰', k: '季节性资金缺口高峰' },
-      { t: '主要经营风险', k: '主要经营风险' },
-      { t: '政策与外部驱动', k: '政策与外部驱动' },
-    ],
-    keyFields: ['行业编号'], editFields: F.industries_all,
-  });
-}
-
-function pageJobs(c) {
-  return dataTablePage(c, {
-    name: 'jobs', no: '04', title: '职业管理（在职客户岗位核实）',
-    sub: `共 ${S.meta ? S.meta.job_count : 0} 条岗位明细`,
-    columns: [
-      COL_INDUSTRY,
-      { t: '常见职位', k: '常见职位', wrap: false, f: (r) => `<b>${esc(r['常见职位'])}</b>`, raw: true },
-      { t: '岗位每天干什么', k: '这个岗位每天干什么' },
-      { t: '审核时怎么问', k: '审核时怎么问' },
-      { t: '能查到哪些证据', k: '能查到哪些证据' },
-      { t: '真干过的人怎么答', k: '真干过的人怎么答' },
-      { t: '没干过的破绽', k: '没干过的破绽' },
-      { t: '审批要点', k: '审批要点' },
-    ],
-    keyFields: ['行业编号', '常见职位'], editFields: F.jobs_all, size: 50,
-  });
-}
-
-function pageCityRisks(c) {
-  return dataTablePage(c, {
-    name: 'city_risks', no: '05', title: '城市风控（行业 × 城市 风险分级）',
-    sub: `共 ${S.meta ? S.meta.city_risk_count : 0} 条 = ${S.meta ? S.meta.industry_count : 0} 行业 × ${S.meta ? S.meta.city_count : 0} 城市`,
-    columns: [
-      COL_INDUSTRY,
-      { t: '城市', k: '城市', wrap: false },
-      { t: '风险层级', k: '风险层级', cls: 'lv', wrap: false },
-      { t: '定级依据与尽调要点', k: '依据与尽调要点' },
-    ],
-    keyFields: ['行业编号', '城市'], editFields: F.risks_all, size: 50,
-  });
-}
-
-function pageModes(c) {
-  return dataTablePage(c, {
-    name: 'modes', no: '02', title: '经营模式详解',
-    sub: `共 ${S.meta ? S.meta.mode_count : 0} 条模式`,
-    columns: [
-      COL_INDUSTRY,
-      { t: '细分模式', k: '细分模式', wrap: false },
-      { t: '运作方式', k: '运作方式' },
-      { t: '盈利逻辑', k: '盈利逻辑' },
-      { t: '上下游与结算回款', k: '上下游与结算回款方式' },
-      { t: '成本结构', k: '成本结构' },
-      { t: '资金需求特点与周期', k: '资金需求特点与周期' },
-      { t: '授信关注要点', k: '授信关注要点' },
-    ],
-    keyFields: ['行业编号', '细分模式'], editFields: F.modes_all,
+function bindGroupToggles(root) {
+  $$('.grp-hd', root).forEach(h => {
+    h.onclick = (e) => {
+      const grp = h.closest('.grp');
+      if (grp) {
+        grp.classList.toggle('collapsed');
+        const toggle = h.querySelector('.toggle');
+        if (toggle) toggle.textContent = grp.classList.contains('collapsed') ? '▸' : '▾';
+      }
+    };
   });
 }
 
 // ================================================================== 统计分析
 function pageAnalytics(c) {
-  const industries = getCollection('industries');
-  const jobs = getCollection('jobs');
-  const modes = getCollection('modes');
-  const cities = D.cities || [];
-  const risks = getCollection('city_risks');
+  const inds = applyEdits('industries', DB.industries);
+  const jobs = applyEdits('jobs', DB.jobs);
+  const modes = applyEdits('modes', DB.modes);
+  const risks = applyEdits('city_risks', DB.city_risks);
+  const cities = DB.cities;
 
   const t = {
-    行业: industries.length,
-    门类: Object.keys(S.meta.categories || {}).length,
-    职业: jobs.length,
-    经营模式: modes.length,
-    城市: cities.length,
-    城市风险记录: risks.length,
+    行业: inds.length, 门类: new Set(inds.map(r => r['行业门类'])).size,
+    职业: jobs.length, 经营模式: modes.length,
+    城市: cities.length, 城市风险记录: risks.length,
   };
-
-  // 风险层级分布
-  const lv = {};
-  risks.forEach((r) => {
-    const v = r['风险层级'] || '未定级';
-    lv[v] = (lv[v] || 0) + 1;
-  });
-  const lvTotal = Object.values(lv).reduce((a, b) => a + b, 0) || 1;
 
   // 门类分布
-  const cats = Object.entries(S.meta.categories || {}).map(([n, ids]) => ({ n, v: { 行业数: ids.length, 编号: ids } }))
-    .sort((a, b) => b.v.行业数 - a.v.行业数);
-  const catMax = cats.length ? cats[0].v.行业数 : 1;
+  const catMap = {};
+  for (const ind of inds) {
+    const cat = ind['行业门类'] || '其他';
+    if (!catMap[cat]) catMap[cat] = { count: 0, codes: [] };
+    catMap[cat].count++;
+    catMap[cat].codes.push(ind['行业编号']);
+  }
+  const cats = Object.entries(catMap).sort((a, b) => b[1].count - a[1].count);
+  const catMax = cats.length ? cats[0][1].count : 1;
 
-  // 城市风险
-  const cityMap = {};
-  risks.forEach((r) => {
+  // 风险层级分布
+  const lvMap = {};
+  for (const r of risks) {
+    const lv = r['风险层级'] || '未分级';
+    lvMap[lv] = (lvMap[lv] || 0) + 1;
+  }
+  const lvTotal = Object.values(lvMap).reduce((a, b) => a + b, 0) || 1;
+
+  // 城市风险集中度
+  const cityRiskMap = {};
+  for (const r of risks) {
     const cn = r['城市'];
-    if (!cityMap[cn]) cityMap[cn] = {};
-    const lv = r['风险层级'] || '未定级';
-    cityMap[cn][lv] = (cityMap[cn][lv] || 0) + 1;
-  });
-  const cityRows = Object.entries(cityMap);
-  const citySum = cityRows.map(([cn, m]) => ({
-    cn, total: Object.values(m).reduce((a, b) => a + b, 0),
-    high: (m['D级·中高风险'] || 0) + (m['E级·高风险'] || 0) + Object.entries(m).filter(([k]) => k.startsWith('C-D')).reduce((a, b) => a + b[1], 0),
-    mid: m['C级·中等风险'] || 0,
-    low: Object.entries(m).filter(([k]) => k.startsWith('A') || k.startsWith('B')).reduce((a, b) => a + b[1], 0),
-    m,
-  })).sort((a, b) => b.high - a.high);
-  const cMax = Math.max(1, ...citySum.map((x) => x.total));
+    if (!cityRiskMap[cn]) cityRiskMap[cn] = { total: 0, high: 0, mid: 0, low: 0 };
+    cityRiskMap[cn].total++;
+    const lv = r['风险层级'] || '';
+    if (lv.startsWith('D') || lv.startsWith('E') || lv.startsWith('C-D')) cityRiskMap[cn].high++;
+    else if (lv.startsWith('C')) cityRiskMap[cn].mid++;
+    else cityRiskMap[cn].low++;
+  }
+  const cityRows = Object.entries(cityRiskMap).sort((a, b) => b[1].high - a[1].high);
+  const cMax = Math.max(1, ...cityRows.map(x => x[1].total));
 
-  // 行业风险指数（按20城层级平均分）
-  const lvScore = (s) => {
-    if (!s) return null;
-    if (s.startsWith('A')) return 1;
-    if (s.startsWith('B-C')) return 2.5;
-    if (s.startsWith('B')) return 2;
-    if (s.startsWith('C-D')) return 4.5;
-    if (s.startsWith('C')) return 3;
-    if (s.startsWith('D')) return 5;
-    if (s.startsWith('E')) return 6;
-    return null;
-  };
-  const indRiskMap = {};
-  risks.forEach((r) => {
-    const code = r['行业编号'];
-    if (!indRiskMap[code]) indRiskMap[code] = { scores: [], city: r['城市'], maxLv: '' };
-    const sc = lvScore(r['风险层级']);
-    if (sc != null) indRiskMap[code].scores.push(sc);
-  });
-
-  const industryRisk = industries.map((ind) => {
-    const info = indRiskMap[ind['行业编号']] || { scores: [] };
-    const scores = info.scores;
-    const avg = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length) : null;
-    const maxCity = risks.filter((r) => r['行业编号'] === ind['行业编号'])
-      .sort((a, b) => (lvScore(b['风险层级']) || 0) - (lvScore(a['风险层级']) || 0))[0];
-    return {
-      '行业编号': ind['行业编号'],
-      '细分行业': ind['细分行业'],
-      '风险指数': avg ? Math.round(avg * 100) / 100 : null,
-      '最高风险城市': maxCity ? maxCity['城市'] : '',
-    };
-  }).filter((x) => x.风险指数 != null);
-
-  const topRisk = industryRisk.slice().sort((a, b) => b.风险指数 - a.风险指数).slice(0, 20);
-  const bestRisk = industryRisk.slice().sort((a, b) => a.风险指数 - b.风险指数).slice(-15).reverse();
-
-  // 覆盖完整性
-  const cov = industries.map((ind) => {
+  // 行业风险指数
+  const indRisk = [];
+  const lvScore = { 'A': 1, 'B': 2, 'B-C': 2.5, 'C': 3, 'C-D': 3.5, 'D': 4, 'D-E': 4.5, 'E': 5 };
+  for (const ind of inds) {
     const code = ind['行业编号'];
-    return {
-      '行业编号': code,
-      '细分行业': ind['细分行业'],
-      职业数: jobs.filter((j) => j['行业编号'] === code).length,
-      模式数: modes.filter((m) => m['行业编号'] === code).length,
-      城市风险数: risks.filter((r) => r['行业编号'] === code).length,
-    };
-  });
-  const bad = cov.filter((x) => x.职业数 === 0 || x.模式数 === 0 || x.城市风险数 !== t.城市);
+    const indRisks = risks.filter(r => r['行业编号'] === code);
+    if (!indRisks.length) continue;
+    let sum = 0, maxCity = '';
+    let maxScore = 0;
+    for (const r of indRisks) {
+      const lv = (r['风险层级'] || '').replace(/级·.*$/, '').replace(/风险|中低|中高|中等/g, '').trim();
+      const sc = lvScore[lv] || 3;
+      sum += sc;
+      if (sc > maxScore) { maxScore = sc; maxCity = r['城市']; }
+    }
+    indRisk.push({ ...ind, 风险指数: +(sum / indRisks.length).toFixed(2), 最高风险城市: maxCity });
+  }
+  indRisk.sort((a, b) => b.风险指数 - a.风险指数);
+  const topRisk = indRisk.slice(0, 20);
+  const bestRisk = indRisk.slice(-15).reverse();
+
+  // 薪资分析
+  const salaryKeys = Object.keys(DB.salary);
+  const salaryStats = salaryKeys.map(k => DB.salary[k]).filter(s => s);
+  const salaryBins = { '3k以下': 0, '3-5k': 0, '5-8k': 0, '8-12k': 0, '12-20k': 0, '20k以上': 0 };
+  for (const s of salaryStats) {
+    const m = s.monthly_median;
+    if (m < 3000) salaryBins['3k以下']++;
+    else if (m < 5000) salaryBins['3-5k']++;
+    else if (m < 8000) salaryBins['5-8k']++;
+    else if (m < 12000) salaryBins['8-12k']++;
+    else if (m < 20000) salaryBins['12-20k']++;
+    else salaryBins['20k以上']++;
+  }
+  const sMax = Math.max(1, ...Object.values(salaryBins));
+
+  // 职业需求分布
+  const demandMap = { '高': 0, '中': 0, '低': 0 };
+  for (const s of salaryStats) {
+    demandMap[s.demand] = (demandMap[s.demand] || 0) + 1;
+  }
 
   c.innerHTML = `
-  <div class="stat-grid">
+  <div class="stat-grid fade-in">
     <div class="stat"><div class="n">${t.行业}</div><div class="l">细分行业</div></div>
     <div class="stat g"><div class="n">${t.门类}</div><div class="l">行业门类</div></div>
     <div class="stat"><div class="n">${t.职业}</div><div class="l">岗位核实明细</div></div>
@@ -944,40 +730,42 @@ function pageAnalytics(c) {
     <div class="stat r"><div class="n">${t.城市风险记录}</div><div class="l">行业×城市 分级记录</div></div>
   </div>
 
-  <div class="card">${cardHead('A', '行业门类分布', `${t.行业} 个细分行业 / ${t.门类} 个门类`)}
+  <div class="card fade-in">${cardHead('A', '行业门类分布', `${t.行业} 个细分行业 / ${t.门类} 个门类`)}
     <div class="card-bd"><div class="bars">
       ${cats.map(([n, v]) => `<div class="bar-row">
-        <div class="bl" title="${esc(v.编号.join('、'))}">${esc(n)}</div>
-        <div class="bt"><div class="bf" style="width:${(v.行业数 / catMax * 100).toFixed(1)}%"></div></div>
-        <div class="bv">${v.行业数}</div></div>`).join('')}
+        <div class="bl" title="${esc(v.codes.join('、'))}">${esc(n)}</div>
+        <div class="bt"><div class="bf" style="width:${(v.count / catMax * 100).toFixed(1)}%"></div></div>
+        <div class="bv">${v.count}</div></div>`).join('')}
     </div></div></div>
 
-  <div class="card">${cardHead('B', '全库风险层级分布', 'A 低 → E 高（按行业×城市记录数）')}
+  <div class="card fade-in">${cardHead('B', '全库风险层级分布', 'A 低 → E 高')}
     <div class="card-bd"><div class="bars">
-      ${Object.entries(lv).sort((a, b) => b[1] - a[1]).map(([n, v]) => `<div class="bar-row ${/^[DE]/.test(n) ? 'red' : /^C-D/.test(n) ? 'orange' : /^C/.test(n) ? 'gold' : 'green'}">
+      ${Object.entries(lvMap).sort((a, b) => b[1] - a[1]).map(([n, v]) => `<div class="bar-row ${/^[DE]/.test(n) ? 'red' : /^C-D/.test(n) ? 'orange' : /^C/.test(n) ? 'gold' : 'green'}">
         <div class="bl">${esc(n)}</div>
         <div class="bt"><div class="bf" style="width:${(v / lvTotal * 100).toFixed(1)}%"></div></div>
         <div class="bv">${v} <small style="color:#94a3b8;font-weight:400">${(v / lvTotal * 100).toFixed(1)}%</small></div></div>`).join('')}
     </div></div></div>
 
-  <div class="card">${cardHead('C', '城市风险集中度', '按 D/E 级 + C-D 级记录数排序')}
+  <div class="card fade-in">${cardHead('C', '城市风险集中度', '按高风险记录数排序')}
     <div class="card-bd"><div class="bars">
-      ${citySum.map((x) => `<div class="bar-row ${x.high / x.total > .45 ? 'red' : x.high / x.total > .3 ? 'orange' : 'gold'}">
-        <div class="bl">${esc(x.cn)}</div>
-        <div class="bt"><div class="bf" style="width:${(x.total / cMax * 100).toFixed(1)}%"></div></div>
-        <div class="bv" title="高/中高 ${x.high}｜中等 ${x.mid}｜低 ${x.low}">${x.high}<small style="color:#94a3b8;font-weight:400">/${x.total}</small></div></div>`).join('')}
-    </div></div></div>
+      ${cityRows.map(([cn, m]) => `<div class="bar-row ${m.high / m.total > .45 ? 'red' : m.high / m.total > .3 ? 'orange' : 'gold'}">
+        <div class="bl">${esc(cn)}</div>
+        <div class="bt"><div class="bf" style="width:${(m.total / cMax * 100).toFixed(1)}%"></div></div>
+        <div class="bv" title="高/中高 ${m.high}｜中等 ${m.mid}｜低 ${m.low}">${m.high}<small style="color:#94a3b8;font-weight:400">/${m.total}</small></div></div>`).join('')}
+    </div>
+    <p class="hint" style="margin-top:10px">条形长度＝该城市全部行业记录数；数字＝「高风险」/「总数」</p>
+    </div></div>
 
-  <div class="card">${cardHead('D', '行业风险热力矩阵', `${t.行业} 行业 × ${t.城市} 城市 · 点击单元格跳转看板`)}
+  <div class="card fade-in">${cardHead('D', '行业风险热力矩阵', `${t.行业} 行业 × ${t.城市} 城市 · 点击单元格跳转看板`)}
     <div class="card-bd"><div class="heat-wrap" id="heatWrap"></div>
       <div class="legend">
-        <span><i class="hc-A"></i>A 低</span><span><i class="hc-BC"></i>B / B-C</span>
+        <span><i class="hc-A"></i>A 低</span><span><i class="hc-BC"></i>B/B-C</span>
         <span><i class="hc-C"></i>C 中等</span><span><i class="hc-CD"></i>C-D 中高</span>
         <span><i class="hc-D"></i>D 中高</span><span><i class="hc-E"></i>E 高</span>
       </div>
     </div></div>
 
-  <div class="card">${cardHead('E', '行业风险指数排行', '20 城层级平均分（A=1 → E=6，分值越高风险越大）')}
+  <div class="card fade-in">${cardHead('E', '行业风险指数排行', '20城层级平均分（A=1→E=5，分值越高风险越大）')}
     <div class="card-bd">
       <div class="btn-row" style="margin-bottom:11px">
         <button class="btn sm on" data-rk="high">风险最高 TOP 20</button>
@@ -986,24 +774,42 @@ function pageAnalytics(c) {
       <div id="rankBox"></div>
     </div></div>
 
-  <div class="card">${cardHead('F', '数据覆盖完整性', '逐行业核对职业 / 经营模式 / 城市风险是否齐全')}
+  <div class="card fade-in">${cardHead('F', '职业薪资分布', `${salaryStats.length} 个职业的月薪中位数分布`)}
+    <div class="card-bd"><div class="bars">
+      ${Object.entries(salaryBins).map(([n, v]) => `<div class="bar-row ${n.includes('20k') || n.includes('12-20') ? 'green' : n.includes('8-12') ? '' : n.includes('5-8') ? 'gold' : n.includes('3-5') ? 'orange' : 'red'}">
+        <div class="bl">${esc(n)}</div>
+        <div class="bt"><div class="bf" style="width:${(v / sMax * 100).toFixed(1)}%"></div></div>
+        <div class="bv">${v}</div></div>`).join('')}
+    </div>
+    <p class="hint" style="margin-top:10px">基于行业基准模型估算，含各城市调整系数</p>
+    </div></div>
+
+  <div class="card fade-in">${cardHead('G', '职业市场需求热度', '高/中/低三档需求分布')}
+    <div class="card-bd"><div class="bars">
+      ${Object.entries(demandMap).map(([n, v]) => `<div class="bar-row ${n === '高' ? 'red' : n === '中' ? 'gold' : 'green'}">
+        <div class="bl">${n === '高' ? '需求旺盛' : n === '中' ? '需求稳定' : '需求一般'}</div>
+        <div class="bt"><div class="bf" style="width:${(v / Math.max(1, salaryStats.length) * 100).toFixed(1)}%"></div></div>
+        <div class="bv">${v} <small style="color:#94a3b8;font-weight:400">${(v / Math.max(1, salaryStats.length) * 100).toFixed(1)}%</small></div></div>`).join('')}
+    </div></div></div>
+
+  <div class="card fade-in">${cardHead('H', '数据覆盖完整性', '逐行业核对职业/经营模式/城市风险是否齐全')}
     <div class="card-bd" id="covBox"></div></div>
   `;
 
   // 热力矩阵
-  (function () {
+  (function() {
+    const cityNames = cities.map(x => x['城市名称']);
     const riskByInd = new Map();
-    for (const row of risks) {
-      if (!riskByInd.has(row['行业编号'])) riskByInd.set(row['行业编号'], new Map());
-      riskByInd.get(row['行业编号']).set(row['城市'], row['风险层级']);
+    for (const r of risks) {
+      if (!riskByInd.has(r['行业编号'])) riskByInd.set(r['行业编号'], new Map());
+      riskByInd.get(r['行业编号']).set(r['城市'], r['风险层级']);
     }
-    const cityNames = cities.map((x) => x['城市名称']);
     let h = '<table class="heat"><thead><tr><th style="left:0;z-index:4;background:#f8fafc">行业</th>'
-      + cityNames.map((n) => `<th>${esc(n)}</th>`).join('') + '</tr></thead><tbody>';
-    for (const a of industryRisk) {
+      + cityNames.map(n => `<th>${esc(n)}</th>`).join('') + '</tr></thead><tbody>';
+    for (const a of indRisk) {
       const m = riskByInd.get(a['行业编号']) || new Map();
       h += `<tr><td class="rowh" title="${esc(a['行业编号'] + ' ' + a['细分行业'])}">${esc(a['行业编号'])} ${esc(a['细分行业'])}</td>`
-        + cityNames.map((cn) => {
+        + cityNames.map(cn => {
           const v = m.get(cn) || '';
           const short = String(v).replace('级·', '').replace(/风险|中低|中高|中等/g, '');
           return `<td class="c ${heatClass(v)}" data-i="${esc(a['行业编号'])}" data-c="${esc(cn)}" title="${esc(a['行业编号'] + ' · ' + cn + '：' + v)}">${esc(short)}</td>`;
@@ -1011,9 +817,9 @@ function pageAnalytics(c) {
     }
     h += '</tbody></table>';
     $('#heatWrap').innerHTML = h;
-    $$('#heatWrap td.c').forEach((td) => {
+    $$('#heatWrap td.c').forEach(td => {
       td.onclick = () => {
-        S.dash = { industry: td.dataset.i, job: '', city: td.dataset.c, ci: new Set(), cj: new Set(), cc: new Set() };
+        S.dash = { industry: td.dataset.i, job: '', city: td.dataset.c, ci: new Set([td.dataset.i]), cj: new Set(), cc: new Set([td.dataset.c]), queried: true };
         go('dashboard');
       };
     });
@@ -1022,24 +828,36 @@ function pageAnalytics(c) {
   // 排行
   const renderRank = (mode) => {
     const list = mode === 'high' ? topRisk : bestRisk;
-    const mx = Math.max(...list.map((x) => x.风险指数 || 0), 1);
-    $('#rankBox').innerHTML = `<div class="bars">${list.map((x) => `<div class="bar-row ${x.风险指数 >= 4.5 ? 'red' : x.风险指数 >= 3.5 ? 'orange' : x.风险指数 >= 2.5 ? 'gold' : 'green'}">
-      <div class="bl" title="${esc(x['行业编号'])}">${esc(x['行业编号'])} ${esc(x['细分行业'])}</div>
+    const mx = Math.max(...list.map(x => x.风险指数 || 0), 1);
+    $('#rankBox').innerHTML = `<div class="bars">${list.map(x => `<div class="bar-row ${x.风险指数 >= 4 ? 'red' : x.风险指数 >= 3 ? 'orange' : x.风险指数 >= 2 ? 'gold' : 'green'}">
+      <div class="bl" style="cursor:pointer" title="点击跳转看板">${esc(x['行业编号'])} ${esc(x['细分行业'])}</div>
       <div class="bt"><div class="bf" style="width:${(x.风险指数 / mx * 100).toFixed(1)}%"></div></div>
       <div class="bv">${x.风险指数} <small style="color:#94a3b8;font-weight:400">${esc(x['最高风险城市'] || '')}</small></div></div>`).join('')}</div>`;
     $$('#rankBox .bar-row .bl').forEach((el, i) => {
-      el.style.cursor = 'pointer';
-      el.onclick = () => { S.dash = { industry: list[i]['行业编号'], job: '', city: '', ci: new Set(), cj: new Set(), cc: new Set() }; go('dashboard'); };
+      el.onclick = () => {
+        S.dash = { industry: list[i]['行业编号'], job: '', city: '', ci: new Set([list[i]['行业编号']]), cj: new Set(), cc: new Set(), queried: true };
+        go('dashboard');
+      };
     });
   };
   renderRank('high');
-  $$('[data-rk]').forEach((b) => { b.onclick = () => { $$('[data-rk]').forEach((x) => x.classList.remove('on')); b.classList.add('on'); renderRank(b.dataset.rk); }; });
+  $$('[data-rk]').forEach(b => { b.onclick = () => { $$('[data-rk]').forEach(x => x.classList.remove('on')); b.classList.add('on'); renderRank(b.dataset.rk); }; });
 
   // 覆盖完整性
+  const cov = inds.map(ind => {
+    const code = ind['行业编号'];
+    return {
+      '行业编号': code, '细分行业': ind['细分行业'],
+      职业数: jobs.filter(j => j['行业编号'] === code).length,
+      模式数: modes.filter(m => m['行业编号'] === code).length,
+      城市风险数: risks.filter(r => r['行业编号'] === code).length,
+    };
+  });
+  const bad = cov.filter(x => x.职业数 === 0 || x.模式数 === 0 || x.城市风险数 !== t.城市);
   $('#covBox').innerHTML = `
     <div class="stat-grid" style="margin-bottom:12px">
-      <div class="stat g"><div class="n">${cov.filter((x) => x.职业数 > 0).length}/${cov.length}</div><div class="l">有职业数据的行业</div></div>
-      <div class="stat g"><div class="n">${cov.filter((x) => x.模式数 > 0).length}/${cov.length}</div><div class="l">有经营模式的行业</div></div>
+      <div class="stat g"><div class="n">${cov.filter(x => x.职业数 > 0).length}/${cov.length}</div><div class="l">有职业数据的行业</div></div>
+      <div class="stat g"><div class="n">${cov.filter(x => x.模式数 > 0).length}/${cov.length}</div><div class="l">有经营模式的行业</div></div>
       <div class="stat ${bad.length ? 'r' : 'g'}"><div class="n">${cov.length - bad.length}/${cov.length}</div><div class="l">三项全齐的行业</div></div>
       <div class="stat"><div class="n">${t.职业}</div><div class="l">职业明细总条数</div></div>
     </div>
@@ -1047,21 +865,162 @@ function pageAnalytics(c) {
       ? `<p class="hint" style="margin-bottom:8px;color:#dc2626">以下 ${bad.length} 个行业存在数据缺口：</p>
          <div class="tbl-wrap" style="max-height:260px"><table class="tbl"><thead><tr>
            <th>行业编号</th><th>细分行业</th><th>职业数</th><th>模式数</th><th>城市风险数</th></tr></thead>
-           <tbody>${bad.map((x) => `<tr><td class="code">${esc(x['行业编号'])}</td><td>${esc(x['细分行业'])}</td>
+           <tbody>${bad.map(x => `<tr><td class="code">${esc(x['行业编号'])}</td><td>${esc(x['细分行业'])}</td>
              <td>${x.职业数 === 0 ? '<span class="tag red">缺</span>' : x.职业数}</td>
              <td>${x.模式数 === 0 ? '<span class="tag red">缺</span>' : x.模式数}</td>
              <td>${x.城市风险数 !== t.城市 ? `<span class="tag gold">${x.城市风险数}/${t.城市}</span>` : x.城市风险数}</td></tr>`).join('')}</tbody></table></div>`
-      : '<p class="hint" style="color:#059669">✓ 全部行业的职业、经营模式、城市风险三项数据均齐全。</p>'}
+      : '<p class="hint" style="color:#059669">✓ 全部行业的职业、经营模式、城市风险三项数据均齐全，无缺口。</p>'}
   `;
+}
+
+// ================================================================== 管理页
+function dataTablePage(c, cfg) {
+  const allData = applyEdits(cfg.name, DB[cfg.name]);
+  const st = { page: 1, size: cfg.size || 50, q: '', total: 0 };
+
+  c.innerHTML = `
+    <div class="card">
+      ${cardHead(cfg.no || '', cfg.title, cfg.sub || '')}
+      <div class="card-bd">
+        <div class="toolbar">
+          <input type="text" id="fQ" placeholder="关键词全文检索…">
+          <span class="sp"></span>
+          <span class="hint" id="cnt"></span>
+          <button class="btn" id="bExp">⬇ 导出本页数据</button>
+        </div>
+        <div class="tbl-wrap" id="tw"></div>
+        <div class="pager" id="pg"></div>
+      </div>
+    </div>`;
+
+  function reload() {
+    let rows = allData;
+    if (st.q) {
+      const kw = st.q.toLowerCase();
+      rows = rows.filter(r => Object.values(r).some(v => String(v || '').toLowerCase().includes(kw)));
+    }
+    st.total = rows.length;
+    const start = (st.page - 1) * st.size;
+    const pageRows = rows.slice(start, start + st.size);
+    $('#cnt').textContent = `共 ${st.total} 条`;
+    renderRows(pageRows);
+    renderPager();
+  }
+
+  function renderRows(rows) {
+    if (!rows.length) { $('#tw').innerHTML = '<div class="empty"><span class="big">🗂</span>没有匹配的记录</div>'; return; }
+    const cols = cfg.columns;
+    $('#tw').innerHTML = `<table class="tbl"><thead><tr>${cols.map(x => `<th>${esc(x.t)}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map(r => `<tr>${cols.map(x => {
+        const v = x.f ? x.f(r) : r[x.k];
+        if (x.cls === 'lv') return `<td><span class="lv ${lvClass(v)}">${esc(v || '—')}</span></td>`;
+        if (x.cls === 'code') return `<td class="code">${esc(v || '')}</td>`;
+        return `<td class="${x.wrap === false ? '' : 'wrap'}">${x.raw ? v : nl2br(v)}</td>`;
+      }).join('')}</tr>`).join('')}</tbody></table>`;
+  }
+
+  function renderPager() {
+    const pages = Math.max(1, Math.ceil(st.total / st.size));
+    $('#pg').innerHTML = `
+      <button class="btn sm" id="pPrev" ${st.page <= 1 ? 'disabled' : ''}>上一页</button>
+      <span>第 ${st.page} / ${pages} 页（${st.total} 条）</span>
+      <button class="btn sm" id="pNext" ${st.page >= pages ? 'disabled' : ''}>下一页</button>
+      <select id="pSize">${[20, 50, 100, 200].map(n => `<option value="${n}"${n === st.size ? ' selected' : ''}>${n} 条/页</option>`).join('')}</select>`;
+    $('#pPrev').onclick = () => { st.page--; reload(); };
+    $('#pNext').onclick = () => { st.page++; reload(); };
+    $('#pSize').onchange = (e) => { st.size = Number(e.target.value); st.page = 1; reload(); };
+  }
+
+  $('#fQ').oninput = debounce((e) => { st.q = e.target.value.trim(); st.page = 1; reload(); }, 280);
+  $('#bExp').onclick = () => {
+    const data = JSON.stringify(allData, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `xwk_${cfg.name}_${Date.now()}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast('已开始下载', a.download);
+  };
+  reload();
+}
+
+function pageIndustries(c) {
+  dataTablePage(c, {
+    name: 'industries', no: '01', title: '行业管理（行业档案 + 前景利润淡旺季）',
+    sub: `共 ${DB.meta.industry_count} 个细分行业`,
+    columns: [
+      { t: '编号', k: '行业编号', cls: 'code', wrap: false },
+      { t: '门类', k: '行业门类', wrap: false },
+      { t: '细分行业', k: '细分行业', wrap: false },
+      { t: '典型经营主体形态', k: '典型经营主体形态' },
+      { t: '必备证照资质', k: '必备证照资质' },
+      { t: '常见经营规模', k: '常见经营规模' },
+      { t: '前景趋势判断', k: '前景趋势判断' },
+      { t: '毛利率', k: '毛利率区间', wrap: false },
+      { t: '净利率', k: '净利率区间', wrap: false },
+    ],
+    size: 50,
+  });
+}
+
+function pageJobs(c) {
+  dataTablePage(c, {
+    name: 'jobs', no: '04', title: '职业管理（在职客户岗位核实）',
+    sub: `共 ${DB.meta.job_count} 条岗位明细`,
+    columns: [
+      { t: '编号', k: '行业编号', cls: 'code', wrap: false },
+      { t: '常见职位', k: '常见职位', wrap: false, f: (r) => `<b>${esc(r['常见职位'])}</b>`, raw: true },
+      { t: '岗位每天干什么', k: '这个岗位每天干什么' },
+      { t: '审核时怎么问', k: '审核时怎么问' },
+      { t: '能查到哪些证据', k: '能查到哪些证据' },
+      { t: '真干过的人怎么答', k: '真干过的人怎么答' },
+      { t: '没干过的破绽', k: '没干过的破绽' },
+      { t: '审批要点', k: '审批要点' },
+    ],
+    size: 50,
+  });
+}
+
+function pageCityRisks(c) {
+  dataTablePage(c, {
+    name: 'city_risks', no: '05', title: '城市风控（行业 × 城市 风险分级）',
+    sub: `共 ${DB.meta.city_risk_count} 条 = ${DB.meta.industry_count} 行业 × ${DB.meta.city_count} 城市`,
+    columns: [
+      { t: '编号', k: '行业编号', cls: 'code', wrap: false },
+      { t: '城市', k: '城市', wrap: false },
+      { t: '风险层级', k: '风险层级', cls: 'lv', wrap: false },
+      { t: '定级依据与尽调要点', k: '依据与尽调要点' },
+    ],
+    size: 50,
+  });
+}
+
+function pageModes(c) {
+  dataTablePage(c, {
+    name: 'modes', no: '02', title: '经营模式详解',
+    sub: `共 ${DB.meta.mode_count} 条模式`,
+    columns: [
+      { t: '编号', k: '行业编号', cls: 'code', wrap: false },
+      { t: '细分模式', k: '细分模式', wrap: false },
+      { t: '运作方式', k: '运作方式' },
+      { t: '盈利逻辑', k: '盈利逻辑' },
+      { t: '上下游与结算回款', k: '上下游与结算回款方式' },
+      { t: '成本结构', k: '成本结构' },
+      { t: '资金需求特点与周期', k: '资金需求特点与周期' },
+      { t: '授信关注要点', k: '授信关注要点' },
+    ],
+    size: 50,
+  });
 }
 
 // ================================================================== 全局搜索
 function pageSearch(c) {
   c.innerHTML = `
-    <div class="card">${cardHead('🔍', '全局搜索', '跨行业 / 职业 / 经营模式 / 城市风险 / 城市 五类数据')}
+    <div class="card">${cardHead('🔍', '全局搜索', '跨行业/职业/经营模式/城市风险/城市 五类数据')}
       <div class="card-bd">
         <div class="toolbar">
-          <input type="text" id="gsQ" placeholder="输入关键词，如：挂靠、社保、光伏贷、闭水试验、广联达、重庆、预收款…" style="flex:1;min-width:280px">
+          <input type="text" id="gsQ" placeholder="输入关键词，如：挂靠、社保、光伏贷、重庆…" style="flex:1;min-width:280px">
           <button class="btn green" id="gsBtn">搜索</button>
         </div>
         <div id="gsRes"><div class="empty"><span class="big">🔍</span>输入关键词开始检索<br><small>支持按行话、证件名、风险点、城市名等任意字段全文匹配</small></div></div>
@@ -1071,81 +1030,50 @@ function pageSearch(c) {
     if (!q) return;
     $('#gsRes').innerHTML = '<div class="loading"><span class="spin"></span>检索中…</div>';
 
-    const industries = getCollection('industries');
-    const jobs = getCollection('jobs');
-    const modes = getCollection('modes');
-    const cityRisks = getCollection('city_risks');
-    const cities = D.cities || [];
+    const inds = applyEdits('industries', DB.industries);
+    const jobs = applyEdits('jobs', DB.jobs);
+    const modes = applyEdits('modes', DB.modes);
+    const risks = applyEdits('city_risks', DB.city_risks);
 
-    const search = (arr, fields) => arr.map((r) => {
-      const hits = fields.filter((f) => String(r[f] || '').toLowerCase().includes(q));
-      return hits.length ? { rec: r, hitFields: hits } : null;
-    }).filter(Boolean);
-
-    const res = {
-      industries: search(industries, F.industries_all).slice(0, 40).map((x) => ({
-        key: x.rec['行业编号'],
-        title: `${x.rec['行业编号']} ${x.rec['细分行业']}`,
-        sub: x.rec['行业门类'],
-        hitFields: x.hitFields,
-      })),
-      jobs: search(jobs, F.jobs_all).slice(0, 40).map((x) => ({
-        key: x.rec['行业编号'] + '|' + x.rec['常见职位'],
-        title: `${x.rec['行业编号']} ${x.rec['常见职位']}`,
-        sub: x.rec['这个岗位每天干什么'] ? String(x.rec['这个岗位每天干什么']).slice(0, 60) : '',
-        hitFields: x.hitFields,
-      })),
-      modes: search(modes, F.modes_all).slice(0, 40).map((x) => ({
-        key: x.rec['行业编号'] + '|' + x.rec['细分模式'],
-        title: `${x.rec['行业编号']} ${x.rec['细分模式']}`,
-        sub: x.rec['运作方式'] ? String(x.rec['运作方式']).slice(0, 60) : '',
-        hitFields: x.hitFields,
-      })),
-      city_risks: search(cityRisks, F.risks_all).slice(0, 40).map((x) => ({
-        key: x.rec['行业编号'] + '|' + x.rec['城市'],
-        title: `${x.rec['行业编号']} · ${x.rec['城市']}`,
-        sub: x.rec['风险层级'],
-        hitFields: x.hitFields,
-      })),
-      cities: search(cities, F.cities_all).slice(0, 40).map((x) => ({
-        key: x.rec['城市名称'],
-        title: x.rec['城市名称'],
-        sub: x.rec['定位标签'],
-        hitFields: x.hitFields,
-      })),
-    };
-
+    const match = (obj, fields) => fields.some(f => String(obj[f] || '').toLowerCase().includes(q));
     const groups = [
-      ['industries', '🏢 行业档案', 'industries'],
-      ['jobs', '👥 职业核实', 'jobs'],
-      ['modes', '🧩 经营模式', 'modes'],
-      ['city_risks', '🏙 城市风险', 'cityrisks'],
-      ['cities', '📍 城市', 'cityrisks'],
+      ['industries', '🏢 行业档案', inds, ['行业编号', '行业门类', '细分行业', '典型经营主体形态', '必备证照资质', '常见经营规模', '订单与客户来源', '典型融资用途', '前景趋势判断', '毛利率区间', '净利率区间', '旺季月份', '淡季月份', '季节性资金缺口高峰', '主要经营风险', '政策与外部驱动', '职业标签串']],
+      ['jobs', '👥 职业核实', jobs, ['行业编号', '常见职位', '这个岗位每天干什么', '审核时怎么问', '能查到哪些证据', '真干过的人怎么答', '没干过的破绽', '审批要点']],
+      ['modes', '🧩 经营模式', modes, ['行业编号', '细分模式', '运作方式', '盈利逻辑', '上下游与结算回款方式', '成本结构', '资金需求特点与周期', '授信关注要点']],
+      ['city_risks', '🏙 城市风险', risks, ['行业编号', '城市', '风险层级', '依据与尽调要点']],
     ];
-    let total = 0;
-    let h = '';
-    for (const [k, t, page] of groups) {
-      const arr = res[k] || [];
-      if (!arr.length) continue;
-      total += arr.length;
-      h += `<div class="sr-group"><div class="gt">${esc(t)}<span class="c">${arr.length}</span></div>
-        ${arr.map((x) => `<div class="sr-item" data-page="${page}" data-k="${esc(x.key)}">
-          <div class="t">${hlText(x.title, q)}</div>
-          <div class="s">${esc(x.sub || '')}</div>
-          <div class="hf">${x.hitFields.map((f) => `<span class="tag gray">${esc(lb(f))}</span>`).join('')}</div>
-        </div>`).join('')}</div>`;
+
+    let total = 0, h = '';
+    for (const [k, title, data, fields] of groups) {
+      const results = data.filter(r => match(r, fields)).slice(0, 40);
+      if (!results.length) continue;
+      total += results.length;
+      h += `<div class="sr-group"><div class="gt">${esc(title)}<span class="c">${results.length}</span></div>
+        ${results.map(x => {
+          const key = keyOf(k, x);
+          const titleField = k === 'industries' ? x['细分行业'] : k === 'jobs' ? x['常见职位'] : k === 'modes' ? x['细分模式'] : x['城市'];
+          const subField = k === 'industries' ? x['行业门类'] : k === 'jobs' ? x['行业编号'] : k === 'modes' ? x['行业编号'] : x['行业编号'];
+          const hitFields = fields.filter(f => String(x[f] || '').toLowerCase().includes(q));
+          return `<div class="sr-item" data-k="${esc(key)}" data-type="${k}">
+            <div class="t">${hlText(titleField, q)}</div>
+            <div class="s">${esc(subField || '')}</div>
+            <div class="hf">${hitFields.map(f => `<span class="tag gray">${esc(lb(f))}</span>`).join('')}</div>
+          </div>`;
+        }).join('')}</div>`;
     }
+
     $('#gsRes').innerHTML = total
       ? `<p class="hint" style="margin-bottom:11px">关键词「<b>${esc(q)}</b>」共命中 <b>${total}</b> 条，点击可跳转到看板定位。</p>${h}`
       : `<div class="empty"><span class="big">🈳</span>没有找到包含「${esc(q)}」的内容</div>`;
-    $$('#gsRes .sr-item').forEach((el) => {
+
+    $$('#gsRes .sr-item').forEach(el => {
       el.onclick = () => {
         const k = el.dataset.k;
-        if (el.dataset.page === 'cityrisks') {
-          const parts = k.split('|');
-          S.dash = { industry: parts[0] || '', job: '', city: parts[1] || '', ci: new Set(), cj: new Set(), cc: new Set() };
+        const parts = k.split('|');
+        if (el.dataset.type === 'city_risks') {
+          S.dash = { industry: parts[0] || '', job: '', city: parts[1] || '', ci: new Set(parts[0] ? [parts[0]] : []), cj: new Set(), cc: new Set(parts[1] ? [parts[1]] : []), queried: true };
         } else {
-          S.dash = { industry: k.split('|')[0], job: '', city: '', ci: new Set(), cj: new Set(), cc: new Set() };
+          S.dash = { industry: parts[0], job: '', city: '', ci: new Set([parts[0]]), cj: new Set(), cc: new Set(), queried: true };
         }
         go('dashboard');
       };
@@ -1164,116 +1092,101 @@ function hlText(text, kw) {
   catch { return t; }
 }
 
-// ================================================================== 数据导出
-function pageTransfer(c) {
-  const m = S.meta;
+// ================================================================== 数据更新中心
+function pageDataUpdate(c) {
+  const m = DB.meta;
+  const jobCount = DB.jobs.length;
+  const salaryCount = Object.keys(DB.salary).length;
+  const lastUpdate = new Date().toLocaleDateString('zh-CN');
+
   c.innerHTML = `
-  <div class="card">${cardHead('📤', '数据导出', '导出当前数据（含浏览器本地编辑）')}
-    <div class="card-bd">
-      <div class="btn-row">
-        <button class="btn green" data-exp="all">导出全部数据</button>
-        <button class="btn" data-exp="industries">行业档案 (${m.industry_count})</button>
-        <button class="btn" data-exp="modes">经营模式 (${m.mode_count})</button>
-        <button class="btn" data-exp="jobs">职业明细 (${m.job_count})</button>
-        <button class="btn" data-exp="city_risks">城市风险 (${m.city_risk_count})</button>
-        <button class="btn" data-exp="cities">城市 (${m.city_count})</button>
+    <div class="update-grid fade-in">
+      <div class="update-card">
+        <div class="uh"><span class="ui">📊</span><span class="ut">行业数据</span></div>
+        <div class="uv">${m.industry_count}</div>
+        <div class="ud">细分行业覆盖<br>含前景、利润、淡旺季等16个维度</div>
       </div>
-      <p class="hint" style="margin-top:10px">导出为 UTF-8 JSON，包含浏览器本地保存的编辑内容。</p>
-    </div></div>
+      <div class="update-card">
+        <div class="uh"><span class="ui">👥</span><span class="ut">职业数据</span></div>
+        <div class="uv">${jobCount}</div>
+        <div class="ud">岗位核实明细<br>含审核话术、破绽识别、审批要点</div>
+      </div>
+      <div class="update-card">
+        <div class="uh"><span class="ui">💰</span><span class="ut">薪资数据</span></div>
+        <div class="uv">${salaryCount}</div>
+        <div class="ud">2020-2026年7年趋势<br>含月薪范围、年薪、增长率、需求热度</div>
+      </div>
+      <div class="update-card">
+        <div class="uh"><span class="ui">🏙</span><span class="ut">城市风控</span></div>
+        <div class="uv">${m.city_risk_count}</div>
+        <div class="ud">${m.city_count}城市×${m.industry_count}行业<br>含风险层级与尽调要点</div>
+      </div>
+    </div>
 
-  <div class="card">${cardHead('🧬', '数据来源说明', '')}
-    <div class="card-bd">
-      <table class="kv">
-        <tr><th>源文件</th><td>${esc(m.source)}</td></tr>
-        <tr><th>行业档案 / 前景利润</th><td><code>_idx</code> 表（99 个细分行业 × 16 个字段）</td></tr>
-        <tr><th>经营模式</th><td><code>_m02</code> 表（${m.mode_count} 条模式）</td></tr>
-        <tr><th>职业核实明细</th><td><code>_m04</code> 表（${m.job_count} 条）</td></tr>
-        <tr><th>城市风险分级</th><td>99 行业 × 20 城市 = ${m.city_risk_count} 条</td></tr>
-        <tr><th>城市清单</th><td>20 个城市</td></tr>
-        <tr><th>部署方式</th><td>纯静态网站，GitHub Pages 托管，无后端依赖</td></tr>
-        <tr><th>编辑存储</th><td>浏览器 localStorage（仅保存在当前浏览器，清除缓存后恢复原始数据）</td></tr>
-      </table>
-    </div></div>`;
+    <div class="card fade-in">${cardHead('🔄', '数据自动更新机制', '通过 GitHub Actions 定期抓取和更新数据')}
+      <div class="card-bd">
+        <p class="hint" style="margin-bottom:14px">本知识库支持通过 GitHub Actions 定时任务自动抓取和更新职业薪资数据。更新流程如下：</p>
+        <div class="bars">
+          <div class="bar-row"><div class="bl" style="width:140px;text-align:left">① 定时触发</div><div class="bt"><div class="bf" style="width:100%"></div></div><div class="bv">每周一 06:00</div></div>
+          <div class="bar-row gold"><div class="bl" style="width:140px;text-align:left">② 数据抓取</div><div class="bt"><div class="bf" style="width:100%"></div></div><div class="bv">公开数据源</div></div>
+          <div class="bar-row green"><div class="bl" style="width:140px;text-align:left">③ 数据合并</div><div class="bt"><div class="bf" style="width:100%"></div></div><div class="bv">增量更新</div></div>
+          <div class="bar-row"><div class="bl" style="width:140px;text-align:left">④ 自动部署</div><div class="bt"><div class="bf" style="width:100%"></div></div><div class="bv">GitHub Pages</div></div>
+        </div>
+        <div style="margin-top:14px;padding:12px 14px;background:#f8fafc;border-radius:8px;border-left:3px solid var(--c-brand)">
+          <p class="hint" style="margin:0">当前数据版本：<b>${lastUpdate}</b><br>
+          数据来源：小微行业知识库看板V3.xlsx + 薪资基准模型估算<br>
+          如需手动更新数据，请在 GitHub 仓库 <code style="background:#e2e8f0;padding:2px 6px;border-radius:4px">gaoyuxinba/xwk-knowledge-base</code> 的 Actions 页面手动触发工作流。</p>
+        </div>
+      </div>
+    </div>
 
-  $$('[data-exp]').forEach((b) => { b.onclick = () => downloadJson(b.dataset.exp); });
+    <div class="card fade-in">${cardHead('📋', '数据维度总览', '当前知识库包含的全部数据维度')}
+      <div class="card-bd">
+        <table class="tbl">
+          <thead><tr><th>数据集</th><th>记录数</th><th>维度</th><th>更新频率</th></tr></thead>
+          <tbody>
+            <tr><td>行业档案</td><td>${m.industry_count}</td><td>16个字段（含门类、形态、证照、规模、前景等）</td><td>季度</td></tr>
+            <tr><td>经营模式</td><td>${m.mode_count}</td><td>6个字段（运作方式、盈利逻辑、成本结构等）</td><td>季度</td></tr>
+            <tr><td>职业核实</td><td>${jobCount}</td><td>6个字段（岗位内容、审核话术、破绽识别等）</td><td>月度</td></tr>
+            <tr><td>城市风控</td><td>${m.city_risk_count}</td><td>4个字段（行业×城市风险层级与尽调）</td><td>半年</td></tr>
+            <tr><td>薪资趋势</td><td>${salaryCount}</td><td>7年趋势（2020-2026月薪/年薪/增长率/需求）</td><td>月度</td></tr>
+            <tr><td>城市信息</td><td>${m.city_count}</td><td>2个字段（城市名称、定位标签）</td><td>年度</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card fade-in">${cardHead('💡', '数据补充建议', '可扩展的数据维度和来源')}
+      <div class="card-bd">
+        <div class="bars">
+          <div class="bar-row green"><div class="bl" style="width:180px;text-align:left">招聘平台薪资</div><div class="bt"><div class="bf" style="width:85%"></div></div><div class="bv">Boss直聘/智联</div></div>
+          <div class="bar-row green"><div class="bl" style="width:180px;text-align:left">政府统计数据</div><div class="bt"><div class="bf" style="width:70%"></div></div><div class="bv">统计局/人社局</div></div>
+          <div class="bar-row gold"><div class="bl" style="width:180px;text-align:left">行业报告</div><div class="bt"><div class="bf" style="width:60%"></div></div><div class="bv">研究院/协会</div></div>
+          <div class="bar-row gold"><div class="bl" style="width:180px;text-align:left">企业招聘信息</div><div class="bt"><div class="bf" style="width:50%"></div></div><div class="bv">天眼查/企查查</div></div>
+          <div class="bar-row"><div class="bl" style="width:180px;text-align:left">职业培训信息</div><div class="bt"><div class="bf" style="width:40%"></div></div><div class="bv">培训机构</div></div>
+        </div>
+        <p class="hint" style="margin-top:12px">以上数据源均可通过 GitHub Actions 定时抓取脚本自动获取并合并到知识库中，持续丰富职业和行业信息。</p>
+      </div>
+    </div>
+  `;
 }
 
-// ================================================================== 页面路由注册
-PAGES = {
-  dashboard: pageDashboard, analytics: pageAnalytics, industries: pageIndustries,
-  jobs: pageJobs, cityrisks: pageCityRisks, modes: pageModes,
-  search: pageSearch, transfer: pageTransfer,
+// ================================================================== 页面注册
+const PAGES = {
+  dashboard: pageDashboard,
+  analytics: pageAnalytics,
+  industries: pageIndustries,
+  jobs: pageJobs,
+  cityrisks: pageCityRisks,
+  modes: pageModes,
+  search: pageSearch,
+  dataupdate: pageDataUpdate,
 };
 
-// ================================================================== 启动
-function showApp() {
-  $('#loginView').style.display = 'none';
-  $('#appView').hidden = false;
-  const dn = S.user.display_name || S.user.username;
-  $('#userName').textContent = dn;
-  $('#userRole').textContent = ROLE_NAME[S.user.role] || S.user.role;
-  $('#userAvatar').textContent = dn.slice(0, 1).toUpperCase();
-  if (S.meta) {
-    $('#metaMini').innerHTML = `<b>${S.meta.industry_count}</b> 行业 · <b>${S.meta.job_count}</b> 职业<br>
-      <b>${S.meta.city_count}</b> 城市 · <b>${S.meta.mode_count}</b> 模式<br>
-      <span style="opacity:.75">源：${esc(S.meta.source)}</span>`;
-  }
-  renderNav();
-  go(S.page || 'dashboard');
+function debounce(fn, ms) {
+  let t; return function () { clearTimeout(t); const a = arguments; t = setTimeout(() => fn.apply(this, a), ms); };
 }
 
-function doLogout() {
-  S.user = null;
-  localStorage.removeItem('xwk_user');
-  $('#appView').hidden = true;
-  $('#loginView').style.display = '';
-  $('#loginPass').value = '';
-}
-
-$('#loginForm').onsubmit = (e) => {
-  e.preventDefault();
-  $('#loginErr').textContent = '';
-  const u = $('#loginUser').value.trim();
-  const p = $('#loginPass').value;
-  const found = USERS.find((x) => x.username === u && x.password === p);
-  if (!found) {
-    $('#loginErr').textContent = '账号或密码错误';
-    $('#loginPass').select();
-    return;
-  }
-  S.user = { ...found };
-  delete S.user.password;
-  localStorage.setItem('xwk_user', JSON.stringify(S.user));
-  showApp();
-  toast('登录成功', `${S.user.display_name} · ${ROLE_NAME[S.user.role]}`);
-};
-
-$$('.usermenu button').forEach((b) => {
-  b.onclick = (e) => {
-    e.stopPropagation();
-    $('.usermenu').classList.remove('show');
-    if (b.dataset.act === 'logout') { if (confirm('确定退出登录？')) doLogout(); }
-  };
-});
-$('.userbox').onclick = (e) => { e.stopPropagation(); $('.usermenu').classList.toggle('show'); };
-document.addEventListener('click', () => $('.usermenu').classList.remove('show'));
-$('#navToggle').onclick = () => $('.sidebar').classList.toggle('open');
-
-// ------------------------------------------------------------------ 启动
-initData();
-
-(function boot() {
-  const saved = localStorage.getItem('xwk_user');
-  if (saved) {
-    try {
-      const u = JSON.parse(saved);
-      const found = USERS.find((x) => x.username === u.username);
-      if (found) {
-        S.user = { ...found };
-        delete S.user.password;
-        showApp();
-        return;
-      }
-    } catch (e) {}
-  }
-})();
+// 自动填充演示账号
+$('#loginUser').value = 'admin';
+$('#loginPass').value = 'wt1201263';
