@@ -588,7 +588,16 @@ function renderDash() {
 }
 
 function cardHead(no, title, sub) {
-  return `<div class="card-hd"><h3><span class="no">${no}</span>${esc(title)}</h3>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
+  const icons = {
+    'A':'📊','I':'💎','J':'📅','M':'📜','T':'⚖',
+    'G':'🔥','N':'🔀','O':'🔍','U':'🎯',
+    'C':'🏙','P':'💰',
+    'F':'💵','B':'⚠','D':'🗺','E':'🏆','R':'🎯',
+    'K':'📈','L':'💵','S':'⚡',
+    '01':'📋','02':'👥','03':'🌍','04':'📐',
+  };
+  const ico = icons[no] || '📈';
+  return `<div class="card-hd"><h3><span class="no">${no}</span><span class="card-ico">${ico}</span>${esc(title)}</h3>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
 }
 
 function sec01(inds, allInds) {
