@@ -266,7 +266,7 @@ function pageDashboard(c) {
   const inds = DB.industries, jobs = DB.jobs, risks = DB.city_risks, salary = DB.salary;
   const cities = DB.cities;
   const catCount = new Set(inds.map(i => i['行业门类'])).size;
-  const highRisk = risks.filter(r => { const lv = String(r['风险层级']||''); return lv.startsWith('D'); }).length;
+  const highRisk = risks.filter(r => normLv(r['风险层级']) === 'D').length;
   const highDemand = Object.values(salary).filter(s => s.demand === '高').length;
   const avgSalary = Math.round(Object.values(salary).reduce((a,s) => a + (s.monthly_median||0), 0) / Math.max(1, Object.keys(salary).length));
 
@@ -370,7 +370,7 @@ function renderDashPreview() {
   const recent = industries.slice(0, 10);
   let h = '<div class="card"><div class="card-bd"><div class="sec-h">最近行业记录（共' + industries.length + '条）</div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>行业编号</th><th>行业门类</th><th>细分行业</th><th>风险</th><th>毛利率</th></tr></thead><tbody>';
   for (const r of recent) {
-    h += '<tr><td>' + esc(r['行业编号']) + '</td><td>' + esc(r['行业门类']) + '</td><td>' + esc(r['细分行业']) + '</td><td>' + esc(r['风险层级'] || '—') + '</td><td>' + esc(r['毛利率区间'] || '—') + '</td></tr>';
+    h += '<tr><td>' + esc(r['行业编号']) + '</td><td>' + esc(r['行业门类']) + '</td><td>' + esc(r['细分行业']) + '</td><td>' + esc(normLv(r['风险层级']) || '—') + '</td><td>' + esc(r['毛利率区间'] || '—') + '</td></tr>';
   }
   h += '</tbody></table></div><p class="hint" style="margin-top:10px">以上为前10条行业记录预览。选择筛选条件后点击「查询数据」查看完整结果。</p></div></div>';
   $('#dashBody').innerHTML = h;
@@ -672,7 +672,7 @@ function sec05(rows, hasInd, selectedCities) {
     <thead><tr><th>城市</th><th>风险层级</th><th>定级依据与尽调要点</th></tr></thead>
     <tbody>${rows.map(r => `<tr>
       <td class="city">${esc(r['城市'])}</td>
-      <td class="lvcell">${hasInd ? `<span class="lv ${lvClass(r['风险层级'])}">${esc(r['风险层级'] || '—')}</span>` : '<span style="color:#cbd5e1">—</span>'}</td>
+      <td class="lvcell">${hasInd ? `<span class="lv ${lvClass(r['风险层级'])}">${esc(normLv(r['风险层级']) || '—')}</span>` : '<span style="color:#cbd5e1">—</span>'}</td>
       <td class="basis">${hasInd ? nl2br(r['依据与尽调要点']) : '<span style="color:#cbd5e1">请先选定行业</span>'}</td>
     </tr>`).join('')}</tbody></table></div>`;
   return `<div class="card fade-in">${cardHead('05', '城市风险分级（A 低 → D 高）', `${rows.length} 条记录`)}
@@ -853,12 +853,13 @@ function getAnalyticsCtx() {
   const cityRiskMap = {};
   for (const r of risks) {
     const cn = r['城市'];
-    if (!cityRiskMap[cn]) cityRiskMap[cn] = { total: 0, high: 0, mid: 0, low: 0 };
+    if (!cityRiskMap[cn]) cityRiskMap[cn] = { total: 0, high: 0, mid: 0, low: 0, aLow: 0, bLow: 0 };
     cityRiskMap[cn].total++;
     const lv = normLv(r['风险层级']);
     if (lv === 'D') cityRiskMap[cn].high++;
     else if (lv === 'C') cityRiskMap[cn].mid++;
-    else cityRiskMap[cn].low++;
+    else if (lv === 'B') { cityRiskMap[cn].bLow++; cityRiskMap[cn].low++; }
+    else { cityRiskMap[cn].aLow++; cityRiskMap[cn].low++; }
   }
   const cityRows = Object.entries(cityRiskMap).sort((a, b) => b[1].high - a[1].high);
 
@@ -1129,14 +1130,16 @@ function pageAnaCity(c) {
       const pct = m.total / totalMax * 100;
       const tot = m.total;
       const bar = (val, color) => val > 0 ? `<div style="height:100%;width:${(val/tot*100)}%;background:${color}"></div>` : '';
-      return `<div class="city-risk-row"><div class="crr-lbl">${esc(cn)}</div><div class="crr-bar"><div class="crr-fill" style="width:${pct}%">${bar(m.low, lvColors.A)}${bar(tot - m.high - m.low - m.mid, lvColors.B)}${bar(m.mid, lvColors.C)}${bar(m.high, lvColors.D)}</div></div><div class="crr-vals"><span style="color:#059669">A:${m.low}</span><span style="color:#3b82f6">B:${tot - m.high - m.low - m.mid}</span><span style="color:#d97706">C:${m.mid}</span><span style="color:#dc2626">D:${m.high}</span></div></div>`;
+      return `<div class="city-risk-row"><div class="crr-lbl">${esc(cn)}</div><div class="crr-bar"><div class="crr-fill" style="width:${pct}%">${bar(m.aLow, lvColors.A)}${bar(m.bLow, lvColors.B)}${bar(m.mid, lvColors.C)}${bar(m.high, lvColors.D)}</div></div><div class="crr-vals"><span style="color:#059669">A:${m.aLow}</span><span style="color:#3b82f6">B:${m.bLow}</span><span style="color:#d97706">C:${m.mid}</span><span style="color:#dc2626">D:${m.high}</span></div></div>`;
     }).join('') + `<div class="legend" style="margin-top:10px"><span><i style="background:#059669"></i>A 低风险</span><span><i style="background:#3b82f6"></i>B 中低</span><span><i style="background:#d97706"></i>C 中等</span><span><i style="background:#dc2626"></i>D 高风险</span></div>`;
   })();
 
   // P 城市薪资购买力排行
   (function() {
     const cf = DB.city_factors || {};
-    const entries = Object.entries(cf).map(([city, f]) => ({ city, factor: f, nominal: Math.round(7000 * f) })).sort((a,b) => b.factor - a.factor);
+    const allSal = Object.values(DB.salary).filter(s => s && s.monthly_median);
+    const avgBase = allSal.length ? Math.round(allSal.reduce((a,s) => a + s.monthly_median, 0) / allSal.length) : 7000;
+    const entries = Object.entries(cf).map(([city, f]) => ({ city, factor: f, nominal: Math.round(avgBase * f) })).sort((a,b) => b.factor - a.factor);
     const mx = Math.max(1, ...entries.map(x => x.nominal));
     $('#cityPP').innerHTML = entries.map(x => `<div class="bar-row ${x.factor >= 1.4 ? 'red' : x.factor >= 1.1 ? 'gold' : 'green'}"><div class="bl">${esc(x.city)}</div><div class="bt"><div class="bf" style="width:${(x.nominal/mx*100).toFixed(1)}%;background:linear-gradient(90deg,#3b82f6,#2563eb)"></div></div><div class="bv">${(x.nominal/1000).toFixed(1)}k <small style="color:#94a3b8;font-weight:400">系数${x.factor}</small></div></div>`).join('');
   })();
@@ -1220,7 +1223,8 @@ function pageAnaRisk(c) {
       const m = riskByInd.get(a['行业编号']) || new Map();
       h += `<tr><td class="rowh" title="${esc(a['行业编号'] + ' ' + a['细分行业'])}">${esc(a['行业编号'])} ${esc(a['细分行业'])}</td>` + cityNames.map(cn => {
         const v = m.get(cn) || '';
-        return `<td class="c ${heatClass(v)}" data-i="${esc(a['行业编号'])}" data-c="${esc(cn)}" title="${esc(a['行业编号'] + ' · ' + cn + '：' + v)}">${esc(v)}</td>`;
+        const nv = normLv(v);
+        return `<td class="c ${heatClass(v)}" data-i="${esc(a['行业编号'])}" data-c="${esc(cn)}" title="${esc(a['行业编号'] + ' · ' + cn + '：' + nv)}">${esc(nv)}</td>`;
       }).join('') + '</tr>';
     }
     h += '</tbody></table>';
