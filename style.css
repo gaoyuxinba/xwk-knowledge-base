@@ -424,6 +424,23 @@ table.heat td.c:hover{outline:2px solid var(--c-brand-2);outline-offset:-2px}
 .update-card .ud{font-size:11.5px;color:var(--c-tx-3);line-height:1.6}
 .update-card .ub{margin-top:8px}
 
+/* ======================= 分析中心标签 ======================= */
+.ana-tabs{
+  display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid var(--c-line);
+  overflow-x:auto;-webkit-overflow-scrolling:touch;
+}
+.ana-tab{
+  padding:10px 18px;border:0;background:transparent;cursor:pointer;
+  font-size:14px;font-weight:600;color:var(--c-tx-3);white-space:nowrap;
+  border-bottom:2px solid transparent;margin-bottom:-2px;transition:.18s;
+  border-radius:8px 8px 0 0;
+}
+.ana-tab:hover{color:var(--c-tx);background:var(--c-hover)}
+.ana-tab.on{color:var(--c-brand);border-bottom-color:var(--c-brand)}
+.ana-panel{display:grid;gap:16px;grid-template-columns:1fr 1fr}
+@media(max-width:880px){.ana-panel{grid-template-columns:1fr}}
+.ana-panel[hidden]{display:none!important}
+
 /* ======================= 看板统计卡片 - 金融科技风格 ======================= */
 .dash-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:20px}
 .stat-card{
