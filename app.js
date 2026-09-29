@@ -941,9 +941,6 @@ function pageAnalytics(c) {
   <div class="card fade-in">${cardHead('P', '城市薪资购买力排行', '各城市薪资系数 vs 实际购买力')}
     <div class="card-bd"><div class="bars" id="cityPP"></div></div></div>
 
-  <div class="card fade-in">${cardHead('Q', '城市行业集中度', '各城市覆盖的行业数量分布')}
-    <div class="card-bd"><div class="bars" id="cityInd"></div></div></div>
-
   <div class="card fade-in">${cardHead('R', '风险-利润象限图', 'X=风险指数 Y=毛利率 四象限分布')}
     <div class="card-bd"><div class="scatter-plot quad" id="quadPlot"></div>
       <div class="scatter-legend">
@@ -1215,21 +1212,6 @@ function pageAnalytics(c) {
       <div class="bl">${esc(x.city)}</div>
       <div class="bt"><div class="bf" style="width:${(x.nominal/mx*100).toFixed(1)}%;background:linear-gradient(90deg,#3b82f6,#2563eb)"></div></div>
       <div class="bv">${(x.nominal/1000).toFixed(1)}k <small style="color:#94a3b8;font-weight:400">系数${x.factor}</small></div></div>`).join('');
-  })();
-
-  // Q 城市行业集中度
-  (function() {
-    const cityIndCnt = {};
-    for (const r of risks) {
-      const cn = r['城市'];
-      cityIndCnt[cn] = (cityIndCnt[cn] || 0) + 1;
-    }
-    const sorted = Object.entries(cityIndCnt).sort((a,b) => b[1]-a[1]);
-    const mx = Math.max(1, ...sorted.map(x => x[1]));
-    $('#cityInd').innerHTML = sorted.map(([cn, v]) => `<div class="bar-row">
-      <div class="bl">${esc(cn)}</div>
-      <div class="bt"><div class="bf" style="width:${(v/mx*100).toFixed(1)}%"></div></div>
-      <div class="bv">${v}条</div></div>`).join('');
   })();
 
   // R 风险-利润象限图
