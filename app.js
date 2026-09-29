@@ -5,16 +5,27 @@
 'use strict';
 
 // ------------------------------------------------------------------ 数据合并
-// 强制加载最新data5（带缓存清除参数）
+// 数据兼容：如果salary没有trend字段，从years字段生成
 if (window.XWK_DATA_5 && window.XWK_DATA_5.salary) {
-  const firstKey = Object.keys(window.XWK_DATA_5.salary)[0];
-  if (firstKey && !window.XWK_DATA_5.salary[firstKey].trend) {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', 'static/data5.js?cb=' + Date.now(), false);
-    xhr.send();
-    if (xhr.status === 200) {
-      try { eval(xhr.responseText); } catch(e) {}
+  for (const key in window.XWK_DATA_5.salary) {
+    const sd = window.XWK_DATA_5.salary[key];
+    if (!sd) continue;
+    // 如果有years但没有trend，生成trend
+    if (sd.years && !sd.trend) {
+      sd.trend = {};
+      for (const yr in sd.years) {
+        const d = sd.years[yr];
+        sd.trend[yr] = {
+          min: d.monthly_min || 0,
+          max: d.monthly_max || 0,
+          median: d.monthly_median || 0,
+          annual: d.annual || 0,
+          growth_rate: d.growth_rate || '',
+        };
+      }
     }
+    // 如果没有annual_median，用annual
+    if (sd.annual && !sd.annual_median) sd.annual_median = sd.annual;
   }
 }
 
