@@ -424,39 +424,61 @@ table.heat td.c:hover{outline:2px solid var(--c-brand-2);outline-offset:-2px}
 .update-card .ud{font-size:11.5px;color:var(--c-tx-3);line-height:1.6}
 .update-card .ub{margin-top:8px}
 
-/* ======================= 看板统计卡片 ======================= */
-.dash-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:18px}
+/* ======================= 看板统计卡片 - 金融科技风格 ======================= */
+.dash-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:20px}
 .stat-card{
-  background:linear-gradient(145deg,#ffffff,#f8fafc);border-radius:16px;padding:18px 14px;
-  display:flex;flex-direction:column;align-items:center;position:relative;overflow:hidden;
-  box-shadow:0 2px 8px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
-  border:1px solid rgba(255,255,255,.8);transition:.22s;
+  position:relative;overflow:hidden;border-radius:18px;padding:20px 18px;
+  display:flex;flex-direction:column;align-items:center;text-align:center;
+  background:#fff;border:1px solid rgba(0,0,0,.06);
+  box-shadow:0 1px 3px rgba(0,0,0,.04),0 4px 12px rgba(0,0,0,.03);
+  transition:all .25s cubic-bezier(.4,0,.2,1);
 }
-.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;border-radius:16px 16px 0 0}
-.stat-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:60%;border-radius:0 0 16px 16px;opacity:.04;pointer-events:none}
-.stat-card:hover{transform:translateY(-3px) scale(1.01);box-shadow:0 8px 24px rgba(0,0,0,.1),0 2px 6px rgba(0,0,0,.06)}
-.stat-card.blue::before{background:linear-gradient(90deg,#60a5fa,#2563eb)}
-.stat-card.blue::after{background:linear-gradient(180deg,transparent,#2563eb)}
-.stat-card.green::before{background:linear-gradient(90deg,#34d399,#059669)}
-.stat-card.green::after{background:linear-gradient(180deg,transparent,#059669)}
-.stat-card.purple::before{background:linear-gradient(90deg,#a78bfa,#7c3aed)}
-.stat-card.purple::after{background:linear-gradient(180deg,transparent,#7c3aed)}
-.stat-card.orange::before{background:linear-gradient(90deg,#fb923c,#ea580c)}
-.stat-card.orange::after{background:linear-gradient(180deg,transparent,#ea580c)}
-.stat-card.red::before{background:linear-gradient(90deg,#f87171,#dc2626)}
-.stat-card.red::after{background:linear-gradient(180deg,transparent,#dc2626)}
+.stat-card:hover{transform:translateY(-4px);box-shadow:0 12px 32px rgba(0,0,0,.08),0 2px 8px rgba(0,0,0,.04)}
+.stat-glow{
+  position:absolute;top:0;left:0;right:0;height:120px;pointer-events:none;
+  opacity:.12;border-radius:18px 18px 50% 50%;
+  transition:opacity .25s;
+}
+.stat-card:hover .stat-glow{opacity:.2}
+.s-blue .stat-glow{background:radial-gradient(ellipse at top,#3b82f6,transparent 70%)}
+.s-green .stat-glow{background:radial-gradient(ellipse at top,#10b981,transparent 70%)}
+.s-purple .stat-glow{background:radial-gradient(ellipse at top,#8b5cf6,transparent 70%)}
+.s-orange .stat-glow{background:radial-gradient(ellipse at top,#f59e0b,transparent 70%)}
+.s-red .stat-glow{background:radial-gradient(ellipse at top,#ef4444,transparent 70%)}
+.stat-top{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .stat-ico{
-  font-size:26px;margin-bottom:6px;
-  filter:drop-shadow(0 2px 4px rgba(0,0,0,.1));
+  width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;
 }
+.stat-ico svg{width:20px;height:20px}
+.s-blue .stat-ico{background:linear-gradient(135deg,#dbeafe,#bfdbfe);color:#2563eb}
+.s-green .stat-ico{background:linear-gradient(135deg,#d1fae5,#a7f3d0);color:#059669}
+.s-purple .stat-ico{background:linear-gradient(135deg,#ede9fe,#ddd6fe);color:#7c3aed}
+.s-orange .stat-ico{background:linear-gradient(135deg,#fef3c7,#fde68a);color:#d97706}
+.s-red .stat-ico{background:linear-gradient(135deg,#fee2e2,#fecaca);color:#dc2626}
+.stat-tag{
+  font-size:11px;font-weight:600;padding:3px 10px;border-radius:6px;letter-spacing:.5px;
+}
+.s-blue .stat-tag{background:#eff6ff;color:#2563eb}
+.s-green .stat-tag{background:#ecfdf5;color:#059669}
+.s-purple .stat-tag{background:#f5f3ff;color:#7c3aed}
+.s-orange .stat-tag{background:#fffbeb;color:#d97706}
+.s-red .stat-tag{background:#fef2f2;color:#dc2626}
 .stat-val{
-  font-size:30px;font-weight:800;line-height:1.1;
-  background:linear-gradient(135deg,#1e293b,#334155);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-  background-clip:text;
+  font-size:32px;font-weight:800;line-height:1.1;color:#0f172a;letter-spacing:-1px;
 }
-.stat-lbl{font-size:12.5px;color:var(--c-tx-2);font-weight:600;margin-top:3px}
-.stat-sub{font-size:10.5px;color:var(--c-tx-3);margin-top:1px;padding:2px 8px;border-radius:8px;background:rgba(0,0,0,.03)}
+.stat-unit{font-size:18px;font-weight:600;color:#64748b;margin-left:1px}
+.stat-lbl{font-size:13px;color:#475569;font-weight:600;margin-top:2px}
+.stat-spark{display:flex;align-items:flex-end;gap:3px;height:24px;margin:8px 0 4px}
+.stat-spark .sp-bar{
+  width:5px;border-radius:3px 3px 0 0;min-height:3px;
+  transition:height .3s ease;
+}
+.s-blue .sp-bar{background:linear-gradient(180deg,#60a5fa,#93c5fd)}
+.s-green .sp-bar{background:linear-gradient(180deg,#34d399,#6ee7b7)}
+.s-purple .sp-bar{background:linear-gradient(180deg,#a78bfa,#c4b5fd)}
+.s-orange .sp-bar{background:linear-gradient(180deg,#fb923c,#fcd34d)}
+.s-red .sp-bar{background:linear-gradient(180deg,#f87171,#fca5a5)}
+.stat-sub{font-size:11px;color:#94a3b8;font-weight:500}
 
 /* ======================= 响应式 ======================= */
 @media (max-width:1180px){
@@ -475,10 +497,13 @@ table.heat td.c:hover{outline:2px solid var(--c-brand-2);outline-offset:-2px}
   .bar-row .bl{width:88px;flex-basis:88px;font-size:11.5px}
   .salary-grid{grid-template-columns:repeat(2,1fr)}
   .salary-bars{height:100px}
-  .dash-stats{grid-template-columns:repeat(2,1fr);gap:8px}
-  .stat-card{padding:12px 10px}
-  .stat-val{font-size:22px}
-  .stat-ico{font-size:18px}
+  .dash-stats{grid-template-columns:repeat(2,1fr);gap:10px}
+  .stat-card{padding:14px 12px}
+  .stat-val{font-size:24px}
+  .stat-ico{width:30px;height:30px}
+  .stat-ico svg{width:16px;height:16px}
+  .stat-spark{height:18px}
+  .stat-spark .sp-bar{width:4px}
   .crumb{font-size:14px}
 }
 
