@@ -142,12 +142,6 @@ const NAV = [
     { id: 'dashboard', ico: '📊', t: '数据看板' },
     { id: 'analytics', ico: '📈', t: '统计分析' },
   ]},
-  { g: '知识管理', items: [
-    { id: 'industries', ico: '🏢', t: '行业管理', badge: () => DB.meta.industry_count },
-    { id: 'jobs', ico: '👥', t: '职业管理', badge: () => DB.meta.job_count },
-    { id: 'cityrisks', ico: '🏙', t: '城市风控', badge: () => DB.meta.city_risk_count },
-    { id: 'modes', ico: '🧩', t: '经营模式', badge: () => DB.meta.mode_count },
-  ]},
   { g: '数据操作', items: [
     { id: 'search', ico: '🔍', t: '全局搜索' },
     { id: 'dataupdate', ico: '🔄', t: '数据更新' },
@@ -251,7 +245,22 @@ function renderMeta() {
 // ================================================================== 看板
 function pageDashboard(c) {
   const q = S.dash;
+  const inds = DB.industries, jobs = DB.jobs, risks = DB.city_risks, salary = DB.salary;
+  const cities = DB.cities;
+  const catCount = new Set(inds.map(i => i['行业门类'])).size;
+  const highRisk = risks.filter(r => { const lv = String(r['风险层级']||''); return lv.startsWith('D') || lv.startsWith('E'); }).length;
+  const highDemand = Object.values(salary).filter(s => s.demand === '高').length;
+  const avgSalary = Math.round(Object.values(salary).reduce((a,s) => a + (s.monthly_median||0), 0) / Math.max(1, Object.keys(salary).length));
+
   c.innerHTML = `
+    <div class="dash-stats">
+      <div class="stat-card blue"><div class="stat-ico">🏢</div><div class="stat-val">${inds.length}</div><div class="stat-lbl">细分行业</div><div class="stat-sub">${catCount}个门类</div></div>
+      <div class="stat-card green"><div class="stat-ico">👥</div><div class="stat-val">${jobs.length}</div><div class="stat-lbl">职业岗位</div><div class="stat-sub">${highDemand}个高需求</div></div>
+      <div class="stat-card purple"><div class="stat-ico">🏙</div><div class="stat-val">${cities.length}</div><div class="stat-lbl">覆盖城市</div><div class="stat-sub">${risks.length}条风险</div></div>
+      <div class="stat-card orange"><div class="stat-ico">💰</div><div class="stat-val">${(avgSalary/1000).toFixed(1)}k</div><div class="stat-lbl">平均月薪</div><div class="stat-sub">基准中位数</div></div>
+      <div class="stat-card red"><div class="stat-ico">⚠</div><div class="stat-val">${highRisk}</div><div class="stat-lbl">高风险记录</div><div class="stat-sub">D-E级</div></div>
+    </div>
+
     <div class="qbar">
       <div class="qbox">
         <div class="qt"><span class="n">1</span>行业查询</div>
