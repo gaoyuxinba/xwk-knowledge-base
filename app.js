@@ -137,14 +137,13 @@ function keyOf(collection, r) {
 // ------------------------------------------------------------------ 导航
 const NAV = [
   { g: '数据分析', items: [
-    { id: 'dashboard', ico: '📊', t: '数据看板', sub: [
-      { id: 'ana-industry', t: '行业分析' },
-      { id: 'ana-job', t: '职业分析' },
-      { id: 'ana-city', t: '城市分析' },
-      { id: 'ana-salary', t: '薪资分析' },
-      { id: 'ana-risk', t: '风险分析' },
-      { id: 'ana-finance', t: '资金分析' },
-    ]},
+    { id: 'dashboard', ico: '📊', t: '数据看板' },
+    { id: 'ana-industry', ico: '🏢', t: '行业分析' },
+    { id: 'ana-job', ico: '👥', t: '职业分析' },
+    { id: 'ana-city', ico: '🏙', t: '城市分析' },
+    { id: 'ana-salary', ico: '💰', t: '薪资分析' },
+    { id: 'ana-risk', ico: '⚠', t: '风险分析' },
+    { id: 'ana-finance', ico: '📈', t: '资金分析' },
   ]},
   { g: '数据操作', items: [
     { id: 'search', ico: '🔍', t: '全局搜索' },
@@ -159,30 +158,33 @@ function renderNav() {
     h += `<div class="nav-group"><div class="g-t">${esc(g.g)}</div>`;
     for (const i of g.items) {
       const b = i.badge ? i.badge() : null;
-      const hasSub = i.sub && i.sub.length;
-      h += `<div class="nav-item${S.page === i.id ? ' on' : ''}" data-page="${i.id}">
+      const isAnchor = i.id.startsWith('ana-');
+      h += `<div class="nav-item${S.page === i.id ? ' on' : ''}" data-page="${i.id}"${isAnchor ? ' data-anchor="1"' : ''}>
         <span class="ni">${i.ico}</span><span>${esc(i.t)}</span>
-        ${b != null ? `<span class="badge">${b}</span>` : ''}${hasSub ? '<span class="nav-arrow">▾</span>' : ''}</div>`;
-      if (hasSub) {
-        h += '<div class="nav-sub">';
-        for (const s of i.sub) {
-          h += `<div class="nav-sub-item" data-anchor="${s.id}"><span>${esc(s.t)}</span></div>`;
-        }
-        h += '</div>';
-      }
+        ${b != null ? `<span class="badge">${b}</span>` : ''}</div>`;
     }
     h += '</div>';
   }
   nav.innerHTML = h;
-  $$('.nav-item', nav).forEach((el) => { el.onclick = () => go(el.dataset.page); });
-  $$('.nav-sub-item', nav).forEach((el) => {
+  $$('.nav-item', nav).forEach((el) => {
     el.onclick = () => {
-      const anchor = el.dataset.anchor;
-      const target = document.getElementById(anchor);
-      if (target) {
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        $$('.nav-sub-item').forEach(x => x.classList.remove('on'));
+      const page = el.dataset.page;
+      if (el.dataset.anchor) {
+        // 分析模块：先切到看板再滚动
+        if (S.page !== 'dashboard') {
+          go('dashboard');
+          setTimeout(() => {
+            const target = document.getElementById(page);
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 300);
+        } else {
+          const target = document.getElementById(page);
+          if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        $$('.nav-item').forEach(x => x.classList.remove('on'));
         el.classList.add('on');
+      } else {
+        go(page);
       }
     };
   });
