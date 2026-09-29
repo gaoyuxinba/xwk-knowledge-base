@@ -1271,6 +1271,7 @@ function pageAnalytics(c) {
     }).join('');
     $('#jobCluster').innerHTML = `<div class="scatter-area">${dots}<div class="quad-line-v" style="left:${(medX/maxX*100).toFixed(1)}%"></div><div class="quad-line-h" style="bottom:66%"></div></div>`;
   })();
+}
 
 // ================================================================== 管理页
 function dataTablePage(c, cfg) {
