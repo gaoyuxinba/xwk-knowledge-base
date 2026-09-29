@@ -177,6 +177,7 @@ function doLogin() {
     if (errEl) errEl.textContent = '账号或密码不正确';
     return false;
   }
+  try { localStorage.removeItem('xwk_edits_v3'); localStorage.removeItem('xwk_saved_v2'); localStorage.removeItem('xwk_recent_v2'); } catch(e) {}
   S.user = acc;
   const lv = $('#loginView');
   const av = $('#appView');
@@ -255,9 +256,7 @@ function pageDashboard(c) {
         <button class="btn green sm" id="bQuery">查询数据</button>
       </span>
     </div>
-    <div id="dashBody">
-      <div class="empty"><span class="big">📋</span>选择行业、职业和城市筛选条件后点击「查询数据」查看详情<br><small>支持多选：点击多个标签可同时选中</small></div>
-    </div>
+    <div id="dashBody"></div>
   `;
 
   const deb = debounce(() => updateChips(), 220);
@@ -270,8 +269,24 @@ function pageDashboard(c) {
   };
   $('#bQuery').onclick = () => { S.dash.queried = true; toast('查询', '行业' + S.dash.ci.size + ' 职业' + S.dash.cj.size + ' 城市' + S.dash.cc.size); renderDash(); };
   updateChips();
-  if (q.queried) renderDash();
+  if (q.queried) {
+    renderDash();
+  } else {
+    renderDashPreview();
+  }
 }
+
+function renderDashPreview() {
+  const industries = applyEdits('industries', DB.industries);
+  const recent = industries.slice(0, 10);
+  let h = '<div class="card"><div class="card-bd"><div class="sec-h">最近行业记录（共' + industries.length + '条）</div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>行业编号</th><th>行业门类</th><th>细分行业</th><th>风险</th><th>毛利率</th></tr></thead><tbody>';
+  for (const r of recent) {
+    h += '<tr><td>' + esc(r['行业编号']) + '</td><td>' + esc(r['行业门类']) + '</td><td>' + esc(r['细分行业']) + '</td><td>' + esc(r['风险层级'] || '—') + '</td><td>' + esc(r['毛利率区间'] || '—') + '</td></tr>';
+  }
+  h += '</tbody></table></div><p class="hint" style="margin-top:10px">以上为前10条行业记录预览。选择筛选条件后点击「查询数据」查看完整结果。</p></div></div>';
+  $('#dashBody').innerHTML = h;
+}
+
 
 function updateChips() {
   const q = S.dash;
