@@ -552,6 +552,8 @@ table.heat td.c:hover{outline:2px solid var(--c-brand-2);outline-offset:-2px}
 .cluster-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:11.5px;color:var(--c-tx-2)}
 .cluster-legend span{display:flex;align-items:center;gap:5px}
 .cluster-legend i{display:inline-block;width:10px;height:10px;border-radius:50%}
+.cj-tag{display:inline-block;margin-left:6px;padding:1px 5px;font-size:9.5px;font-weight:500;color:#64748b;background:#f1f5f9;border-radius:8px;line-height:1.4;vertical-align:middle}
+.cj-name{display:flex;align-items:center;justify-content:flex-end}
 
 /* ======================= 日历热力图 ======================= */
 .cal-tbl{width:100%;border-collapse:collapse;font-size:11px}
