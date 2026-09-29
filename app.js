@@ -137,8 +137,14 @@ function keyOf(collection, r) {
 // ------------------------------------------------------------------ 导航
 const NAV = [
   { g: '数据分析', items: [
-    { id: 'dashboard', ico: '📊', t: '数据看板' },
-    { id: 'analytics', ico: '📈', t: '分析中心' },
+    { id: 'dashboard', ico: '📊', t: '数据看板', sub: [
+      { id: 'ana-industry', t: '行业分析' },
+      { id: 'ana-job', t: '职业分析' },
+      { id: 'ana-city', t: '城市分析' },
+      { id: 'ana-salary', t: '薪资分析' },
+      { id: 'ana-risk', t: '风险分析' },
+      { id: 'ana-finance', t: '资金分析' },
+    ]},
   ]},
   { g: '数据操作', items: [
     { id: 'search', ico: '🔍', t: '全局搜索' },
@@ -153,14 +159,33 @@ function renderNav() {
     h += `<div class="nav-group"><div class="g-t">${esc(g.g)}</div>`;
     for (const i of g.items) {
       const b = i.badge ? i.badge() : null;
+      const hasSub = i.sub && i.sub.length;
       h += `<div class="nav-item${S.page === i.id ? ' on' : ''}" data-page="${i.id}">
         <span class="ni">${i.ico}</span><span>${esc(i.t)}</span>
-        ${b != null ? `<span class="badge">${b}</span>` : ''}</div>`;
+        ${b != null ? `<span class="badge">${b}</span>` : ''}${hasSub ? '<span class="nav-arrow">▾</span>' : ''}</div>`;
+      if (hasSub) {
+        h += '<div class="nav-sub">';
+        for (const s of i.sub) {
+          h += `<div class="nav-sub-item" data-anchor="${s.id}"><span>${esc(s.t)}</span></div>`;
+        }
+        h += '</div>';
+      }
     }
     h += '</div>';
   }
   nav.innerHTML = h;
   $$('.nav-item', nav).forEach((el) => { el.onclick = () => go(el.dataset.page); });
+  $$('.nav-sub-item', nav).forEach((el) => {
+    el.onclick = () => {
+      const anchor = el.dataset.anchor;
+      const target = document.getElementById(anchor);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        $$('.nav-sub-item').forEach(x => x.classList.remove('on'));
+        el.classList.add('on');
+      }
+    };
+  });
 }
 
 const PAGE_TITLE = {
@@ -788,6 +813,9 @@ function bindGroupToggles(root) {
       }
     };
   });
+
+  // 追加分析中心内容到看板底部
+  pageAnalytics(c);
 }
 
 // ================================================================== 统计分析
@@ -879,7 +907,7 @@ function pageAnalytics(c) {
     demandMap[s.demand] = (demandMap[s.demand] || 0) + 1;
   }
 
-  c.innerHTML = `
+  c.innerHTML += `
   <div class="stat-grid fade-in">
     <div class="stat"><div class="n">${t.行业}</div><div class="l">细分行业</div></div>
     <div class="stat g"><div class="n">${t.门类}</div><div class="l">行业门类</div></div>
@@ -889,7 +917,7 @@ function pageAnalytics(c) {
     <div class="stat r"><div class="n">${t.城市风险记录}</div><div class="l">行业×城市 分级记录</div></div>
   </div>
 
-  <h3 class="ana-h">行业分析</h3>
+  <h3 class="ana-h" id="ana-industry">行业分析</h3>
   <div class="ana-grid">
     <div class="card fade-in">${cardHead('A', '行业门类分布', `${t.行业} 个细分行业 / ${t.门类} 个门类`)}
       <div class="card-bd"><div class="bars">
@@ -917,7 +945,7 @@ function pageAnalytics(c) {
       <div class="card-bd"><div class="bars" id="licenseRank"></div></div></div>
   </div>
 
-  <h3 class="ana-h">职业分析</h3>
+  <h3 class="ana-h" id="ana-job">职业分析</h3>
   <div class="ana-grid">
     <div class="card fade-in">${cardHead('G', '职业市场需求热度', '高/中/低三档需求分布')}
       <div class="card-bd"><div class="bars">
@@ -943,7 +971,7 @@ function pageAnalytics(c) {
         </div></div></div>
   </div>
 
-  <h3 class="ana-h">城市分析</h3>
+  <h3 class="ana-h" id="ana-city">城市分析</h3>
   <div class="ana-grid">
     <div class="card fade-in">${cardHead('C', '城市风险分布', '各城市风险等级占比')}
       <div class="card-bd" id="cityRiskDist"></div></div>
@@ -952,7 +980,7 @@ function pageAnalytics(c) {
       <div class="card-bd"><div class="bars" id="cityPP"></div></div></div>
   </div>
 
-  <h3 class="ana-h">薪资分析</h3>
+  <h3 class="ana-h" id="ana-salary">薪资分析</h3>
   <div class="ana-grid">
     <div class="card fade-in">${cardHead('F', '职业薪资分布', `${salaryStats.length} 个职业的月薪中位数分布`)}
       <div class="card-bd"><div class="bars">
@@ -968,7 +996,7 @@ function pageAnalytics(c) {
       <div class="card-bd"><div class="tbl-wrap" id="crossJob2"></div></div></div>
   </div>
 
-  <h3 class="ana-h">风险分析</h3>
+  <h3 class="ana-h" id="ana-risk">风险分析</h3>
   <div class="ana-grid">
     <div class="card fade-in">${cardHead('B', '全库风险层级分布', 'A 低 → D 高')}
       <div class="card-bd"><div class="bars">
@@ -1007,7 +1035,7 @@ function pageAnalytics(c) {
         </div></div></div>
   </div>
 
-  <h3 class="ana-h">资金分析</h3>
+  <h3 class="ana-h" id="ana-finance">资金分析</h3>
   <div class="ana-grid">
     <div class="card fade-in">${cardHead('K', '季节性资金缺口时间轴', '按月份排列资金需求高峰')}
       <div class="card-bd"><div id="fundGap"></div></div></div>
@@ -1700,7 +1728,6 @@ function pageDataUpdate(c) {
 // ================================================================== 页面注册
 const PAGES = {
   dashboard: pageDashboard,
-  analytics: pageAnalytics,
   industries: pageIndustries,
   jobs: pageJobs,
   cityrisks: pageCityRisks,
