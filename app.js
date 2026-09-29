@@ -140,7 +140,7 @@ function keyOf(collection, r) {
 const NAV = [
   { g: '数据分析', items: [
     { id: 'dashboard', ico: '📊', t: '数据看板' },
-    { id: 'analytics', ico: '📈', t: '统计分析' },
+    { id: 'analytics', ico: '📈', t: '分析中心' },
   ]},
   { g: '数据操作', items: [
     { id: 'search', ico: '🔍', t: '全局搜索' },
@@ -166,8 +166,8 @@ function renderNav() {
 }
 
 const PAGE_TITLE = {
-  dashboard: '数据看板', analytics: '统计分析', industries: '行业管理', jobs: '职业管理',
-  cityrisks: '城市风控', modes: '经营模式', search: '全局搜索', dataupdate: '数据更新中心',
+  dashboard: '数据看板', analytics: '分析中心', industries: '行业管理', jobs: '职业管理',
+  cityrisks: '城市风控', modes: '经营模式', search: '全局搜索', dataupdate: '数据更新',
 };
 
 function go(page) {
@@ -891,124 +891,174 @@ function pageAnalytics(c) {
     <div class="stat r"><div class="n">${t.城市风险记录}</div><div class="l">行业×城市 分级记录</div></div>
   </div>
 
-  <div class="card fade-in">${cardHead('A', '行业门类分布', `${t.行业} 个细分行业 / ${t.门类} 个门类`)}
-    <div class="card-bd"><div class="bars">
-      ${cats.map(([n, v]) => `<div class="bar-row">
-        <div class="bl" title="${esc(v.codes.join('、'))}">${esc(n)}</div>
-        <div class="bt"><div class="bf" style="width:${(v.count / catMax * 100).toFixed(1)}%"></div></div>
-        <div class="bv">${v.count}</div></div>`).join('')}
-    </div></div></div>
+  <div class="ana-tabs" id="anaTabs">
+    <button class="ana-tab on" data-tab="industry">行业分析</button>
+    <button class="ana-tab" data-tab="job">职业分析</button>
+    <button class="ana-tab" data-tab="city">城市分析</button>
+    <button class="ana-tab" data-tab="salary">薪资分析</button>
+    <button class="ana-tab" data-tab="risk">风险分析</button>
+    <button class="ana-tab" data-tab="finance">资金分析</button>
+    <button class="ana-tab" data-tab="overview">综合概览</button>
+  </div>
 
-  <div class="card fade-in">${cardHead('B', '全库风险层级分布', 'A 低 → E 高')}
-    <div class="card-bd"><div class="bars">
-      ${Object.entries(lvMap).sort((a, b) => b[1] - a[1]).map(([n, v]) => `<div class="bar-row ${/^[DE]/.test(n) ? 'red' : /^C-D/.test(n) ? 'orange' : /^C/.test(n) ? 'gold' : 'green'}">
-        <div class="bl">${esc(n)}</div>
-        <div class="bt"><div class="bf" style="width:${(v / lvTotal * 100).toFixed(1)}%"></div></div>
-        <div class="bv">${v} <small style="color:#94a3b8;font-weight:400">${(v / lvTotal * 100).toFixed(1)}%</small></div></div>`).join('')}
-    </div></div></div>
+  <div class="ana-panel" data-panel="industry">
+    <div class="card fade-in">${cardHead('A', '行业门类分布', `${t.行业} 个细分行业 / ${t.门类} 个门类`)}
+      <div class="card-bd"><div class="bars">
+        ${cats.map(([n, v]) => `<div class="bar-row">
+          <div class="bl" title="${esc(v.codes.join('、'))}">${esc(n)}</div>
+          <div class="bt"><div class="bf" style="width:${(v.count / catMax * 100).toFixed(1)}%"></div></div>
+          <div class="bv">${v.count}</div></div>`).join('')}
+      </div></div></div>
 
-  <div class="card fade-in">${cardHead('C', '城市风险集中度', '按高风险记录数排序')}
-    <div class="card-bd"><div class="bars">
-      ${cityRows.map(([cn, m]) => `<div class="bar-row ${m.high / m.total > .45 ? 'red' : m.high / m.total > .3 ? 'orange' : 'gold'}">
-        <div class="bl">${esc(cn)}</div>
-        <div class="bt"><div class="bf" style="width:${(m.total / cMax * 100).toFixed(1)}%"></div></div>
-        <div class="bv" title="高/中高 ${m.high}｜中等 ${m.mid}｜低 ${m.low}">${m.high}<small style="color:#94a3b8;font-weight:400">/${m.total}</small></div></div>`).join('')}
-    </div>
-    <p class="hint" style="margin-top:10px">条形长度＝该城市全部行业记录数；数字＝「高风险」/「总数」</p>
-    </div></div>
+    <div class="card fade-in">${cardHead('I', '毛利率 vs 净利率 散点图', '99个行业利润率分布')}
+      <div class="card-bd"><div class="scatter-plot" id="scatterPP"></div>
+        <div class="scatter-legend">
+          <span><i style="background:#059669"></i>高利润（毛>20%或净>10%）</span>
+          <span><i style="background:#d97706"></i>中等利润</span>
+          <span><i style="background:#dc2626"></i>低利润或亏损风险</span>
+        </div></div></div>
 
-  <div class="card fade-in">${cardHead('D', '行业风险热力矩阵', `${t.行业} 行业 × ${t.城市} 城市 · 点击单元格跳转看板`)}
-    <div class="card-bd"><div class="heat-wrap" id="heatWrap"></div>
-      <div class="legend">
-        <span><i class="hc-A"></i>A 低</span><span><i class="hc-BC"></i>B/B-C</span>
-        <span><i class="hc-C"></i>C 中等</span><span><i class="hc-CD"></i>C-D 中高</span>
-        <span><i class="hc-D"></i>D 中高</span><span><i class="hc-E"></i>E 高</span>
+    <div class="card fade-in">${cardHead('J', '旺淡季日历热力图', '12个月 × 行业门类 旺季分布')}
+      <div class="card-bd"><div class="cal-heat" id="calHeat"></div></div></div>
+
+    <div class="card fade-in">${cardHead('M', '政策驱动词频分析', '政策与外部驱动关键词统计')}
+      <div class="card-bd"><div class="bars" id="policyFreq"></div></div></div>
+
+    <div class="card fade-in">${cardHead('T', '监管强度地图', '各行业必备证照数量统计')}
+      <div class="card-bd"><div class="bars" id="licenseRank"></div></div></div>
+  </div>
+
+  <div class="ana-panel" data-panel="job" hidden>
+    <div class="card fade-in">${cardHead('F', '职业薪资分布', `${salaryStats.length} 个职业的月薪中位数分布`)}
+      <div class="card-bd"><div class="bars">
+        ${Object.entries(salaryBins).map(([n, v]) => `<div class="bar-row ${n.includes('20k') || n.includes('12-20') ? 'green' : n.includes('8-12') ? '' : n.includes('5-8') ? 'gold' : n.includes('3-5') ? 'orange' : 'red'}">
+          <div class="bl">${esc(n)}</div>
+          <div class="bt"><div class="bf" style="width:${(v / sMax * 100).toFixed(1)}%"></div></div>
+          <div class="bv">${v}</div></div>`).join('')}
       </div>
-    </div></div>
+      <p class="hint" style="margin-top:10px">基于国家统计局行业基准薪资，含各城市调整系数</p>
+      </div></div>
 
-  <div class="card fade-in">${cardHead('E', '行业风险指数排行', '20城层级平均分（A=1→E=5，分值越高风险越大）')}
-    <div class="card-bd">
-      <div class="btn-row" style="margin-bottom:11px">
-        <button class="btn sm on" data-rk="high">风险最高 TOP 20</button>
-        <button class="btn sm" data-rk="low">风险最低 TOP 15</button>
+    <div class="card fade-in">${cardHead('G', '职业市场需求热度', '高/中/低三档需求分布')}
+      <div class="card-bd"><div class="bars">
+        ${Object.entries(demandMap).map(([n, v]) => `<div class="bar-row ${n === '高' ? 'red' : n === '中' ? 'gold' : 'green'}">
+          <div class="bl">${n === '高' ? '需求旺盛' : n === '中' ? '需求稳定' : '需求一般'}</div>
+          <div class="bt"><div class="bf" style="width:${(v / Math.max(1, salaryStats.length) * 100).toFixed(1)}%"></div></div>
+          <div class="bv">${v} <small style="color:#94a3b8;font-weight:400">${(v / Math.max(1, salaryStats.length) * 100).toFixed(1)}%</small></div></div>`).join('')}
+      </div></div></div>
+
+    <div class="card fade-in">${cardHead('N', '职业交叉行业薪资矩阵', '同一职位在不同行业的薪资对比')}
+      <div class="card-bd"><div class="tbl-wrap" id="crossJob"></div></div></div>
+
+    <div class="card fade-in">${cardHead('O', '职业审核难度评估', '基于证据可查性和破绽数量评分')}
+      <div class="card-bd"><div id="auditDiff"></div></div></div>
+
+    <div class="card fade-in">${cardHead('U', '职业群组聚类', '按薪资水平和市场需求四象限分组')}
+      <div class="card-bd"><div class="scatter-plot" id="jobCluster"></div>
+        <div class="scatter-legend">
+          <span><i style="background:#dc2626"></i>高薪高需求</span>
+          <span><i style="background:#059669"></i>低薪高需求</span>
+          <span><i style="background:#64748b"></i>高薪低需求</span>
+          <span><i style="background:#94a3b8"></i>低薪低需求</span>
+        </div></div></div>
+  </div>
+
+  <div class="ana-panel" data-panel="city" hidden>
+    <div class="card fade-in">${cardHead('C', '城市风险集中度', '按高风险记录数排序')}
+      <div class="card-bd"><div class="bars">
+        ${cityRows.map(([cn, m]) => `<div class="bar-row ${m.high / m.total > .45 ? 'red' : m.high / m.total > .3 ? 'orange' : 'gold'}">
+          <div class="bl">${esc(cn)}</div>
+          <div class="bt"><div class="bf" style="width:${(m.total / cMax * 100).toFixed(1)}%"></div></div>
+          <div class="bv" title="高/中高 ${m.high}｜中等 ${m.mid}｜低 ${m.low}">${m.high}<small style="color:#94a3b8;font-weight:400">/${m.total}</small></div></div>`).join('')}
       </div>
-      <div id="rankBox"></div>
-    </div></div>
+      <p class="hint" style="margin-top:10px">条形长度＝该城市全部行业记录数；数字＝「高风险」/「总数」</p>
+      </div></div>
 
-  <div class="card fade-in">${cardHead('F', '职业薪资分布', `${salaryStats.length} 个职业的月薪中位数分布`)}
-    <div class="card-bd"><div class="bars">
-      ${Object.entries(salaryBins).map(([n, v]) => `<div class="bar-row ${n.includes('20k') || n.includes('12-20') ? 'green' : n.includes('8-12') ? '' : n.includes('5-8') ? 'gold' : n.includes('3-5') ? 'orange' : 'red'}">
-        <div class="bl">${esc(n)}</div>
-        <div class="bt"><div class="bf" style="width:${(v / sMax * 100).toFixed(1)}%"></div></div>
-        <div class="bv">${v}</div></div>`).join('')}
-    </div>
-    <p class="hint" style="margin-top:10px">基于行业基准模型估算，含各城市调整系数</p>
-    </div></div>
+    <div class="card fade-in">${cardHead('P', '城市薪资购买力排行', '各城市薪资系数 vs 实际购买力')}
+      <div class="card-bd"><div class="bars" id="cityPP"></div></div></div>
+  </div>
 
-  <div class="card fade-in">${cardHead('G', '职业市场需求热度', '高/中/低三档需求分布')}
-    <div class="card-bd"><div class="bars">
-      ${Object.entries(demandMap).map(([n, v]) => `<div class="bar-row ${n === '高' ? 'red' : n === '中' ? 'gold' : 'green'}">
-        <div class="bl">${n === '高' ? '需求旺盛' : n === '中' ? '需求稳定' : '需求一般'}</div>
-        <div class="bt"><div class="bf" style="width:${(v / Math.max(1, salaryStats.length) * 100).toFixed(1)}%"></div></div>
-        <div class="bv">${v} <small style="color:#94a3b8;font-weight:400">${(v / Math.max(1, salaryStats.length) * 100).toFixed(1)}%</small></div></div>`).join('')}
-    </div></div></div>
+  <div class="ana-panel" data-panel="salary" hidden>
+    <div class="card fade-in">${cardHead('F', '职业薪资分布', `${salaryStats.length} 个职业的月薪中位数分布`)}
+      <div class="card-bd"><div class="bars">
+        ${Object.entries(salaryBins).map(([n, v]) => `<div class="bar-row ${n.includes('20k') || n.includes('12-20') ? 'green' : n.includes('8-12') ? '' : n.includes('5-8') ? 'gold' : n.includes('3-5') ? 'orange' : 'red'}">
+          <div class="bl">${esc(n)}</div>
+          <div class="bt"><div class="bf" style="width:${(v / sMax * 100).toFixed(1)}%"></div></div>
+          <div class="bv">${v}</div></div>`).join('')}
+      </div>
+      <p class="hint" style="margin-top:10px">基于国家统计局行业基准薪资，含各城市调整系数</p>
+      </div></div>
 
-  <div class="card fade-in">${cardHead('H', '数据覆盖完整性', '逐行业核对职业/经营模式/城市风险是否齐全')}
-    <div class="card-bd" id="covBox"></div></div>
+    <div class="card fade-in">${cardHead('N', '职业交叉行业薪资矩阵', '同一职位在不同行业的薪资对比')}
+      <div class="card-bd"><div class="tbl-wrap" id="crossJob2"></div></div></div>
 
-  <div class="card fade-in">${cardHead('I', '毛利率 vs 净利率 散点图', '99个行业利润率分布')}
-    <div class="card-bd"><div class="scatter-plot" id="scatterPP"></div>
-      <div class="scatter-legend">
-        <span><i style="background:#059669"></i>高利润（毛>20%或净>10%）</span>
-        <span><i style="background:#d97706"></i>中等利润</span>
-        <span><i style="background:#dc2626"></i>低利润或亏损风险</span>
+    <div class="card fade-in">${cardHead('P', '城市薪资购买力排行', '各城市薪资系数 vs 实际购买力')}
+      <div class="card-bd"><div class="bars" id="cityPP2"></div></div></div>
+  </div>
+
+  <div class="ana-panel" data-panel="risk" hidden>
+    <div class="card fade-in">${cardHead('B', '全库风险层级分布', 'A 低 → E 高')}
+      <div class="card-bd"><div class="bars">
+        ${Object.entries(lvMap).sort((a, b) => b[1] - a[1]).map(([n, v]) => `<div class="bar-row ${/^[DE]/.test(n) ? 'red' : /^C-D/.test(n) ? 'orange' : /^C/.test(n) ? 'gold' : 'green'}">
+          <div class="bl">${esc(n)}</div>
+          <div class="bt"><div class="bf" style="width:${(v / lvTotal * 100).toFixed(1)}%"></div></div>
+          <div class="bv">${v} <small style="color:#94a3b8;font-weight:400">${(v / lvTotal * 100).toFixed(1)}%</small></div></div>`).join('')}
       </div></div></div>
 
-  <div class="card fade-in">${cardHead('J', '旺淡季日历热力图', '12个月 × 行业门类 旺季分布')}
-    <div class="card-bd"><div class="cal-heat" id="calHeat"></div></div></div>
+    <div class="card fade-in">${cardHead('D', '行业风险热力矩阵', `${t.行业} 行业 × ${t.城市} 城市 · 点击单元格跳转看板`)}
+      <div class="card-bd"><div class="heat-wrap" id="heatWrap"></div>
+        <div class="legend">
+          <span><i class="hc-A"></i>A 低</span><span><i class="hc-BC"></i>B/B-C</span>
+          <span><i class="hc-C"></i>C 中等</span><span><i class="hc-CD"></i>C-D 中高</span>
+          <span><i class="hc-D"></i>D 中高</span><span><i class="hc-E"></i>E 高</span>
+        </div>
+      </div></div>
 
-  <div class="card fade-in">${cardHead('K', '季节性资金缺口时间轴', '按月份排列的资金需求高峰')}
-    <div class="card-bd"><div id="fundGap"></div></div></div>
+    <div class="card fade-in">${cardHead('E', '行业风险指数排行', '20城层级平均分（A=1→E=5，分值越高风险越大）')}
+      <div class="card-bd">
+        <div class="btn-row" style="margin-bottom:11px">
+          <button class="btn sm on" data-rk="high">风险最高 TOP 20</button>
+          <button class="btn sm" data-rk="low">风险最低 TOP 15</button>
+        </div>
+        <div id="rankBox"></div>
+      </div></div>
 
-  <div class="card fade-in">${cardHead('L', '典型融资用途分类统计', '提取融资用途关键词频次')}
-    <div class="card-bd"><div class="bars" id="fundUse"></div></div></div>
+    <div class="card fade-in">${cardHead('R', '风险-利润象限图', 'X=风险指数 Y=毛利率 四象限分布')}
+      <div class="card-bd"><div class="scatter-plot quad" id="quadPlot"></div>
+        <div class="scatter-legend">
+          <span><i style="background:#dc2626"></i>高风险高利润</span>
+          <span><i style="background:#059669"></i>低风险高利润</span>
+          <span><i style="background:#d97706"></i>高风险低利润</span>
+          <span><i style="background:#64748b"></i>低风险低利润</span>
+        </div></div></div>
+  </div>
 
-  <div class="card fade-in">${cardHead('M', '政策驱动词频分析', '政策与外部驱动关键词统计')}
-    <div class="card-bd"><div class="bars" id="policyFreq"></div></div></div>
+  <div class="ana-panel" data-panel="finance" hidden>
+    <div class="card fade-in">${cardHead('K', '季节性资金缺口时间轴', '按月份排列的资金需求高峰')}
+      <div class="card-bd"><div id="fundGap"></div></div></div>
 
-  <div class="card fade-in">${cardHead('N', '职业交叉行业薪资矩阵', '同一职位在不同行业的薪资对比')}
-    <div class="card-bd"><div class="tbl-wrap" id="crossJob"></div></div></div>
+    <div class="card fade-in">${cardHead('L', '典型融资用途分类统计', '提取融资用途关键词频次')}
+      <div class="card-bd"><div class="bars" id="fundUse"></div></div></div>
 
-  <div class="card fade-in">${cardHead('O', '职业审核难度评估', '基于证据可查性和破绽数量评分')}
-    <div class="card-bd"><div id="auditDiff"></div></div></div>
+    <div class="card fade-in">${cardHead('S', '资金需求紧迫度排行', '综合融资用途+资金缺口+淡旺季评分')}
+      <div class="card-bd"><div class="bars" id="fundRank"></div></div></div>
+  </div>
 
-  <div class="card fade-in">${cardHead('P', '城市薪资购买力排行', '各城市薪资系数 vs 实际购买力')}
-    <div class="card-bd"><div class="bars" id="cityPP"></div></div></div>
-
-  <div class="card fade-in">${cardHead('R', '风险-利润象限图', 'X=风险指数 Y=毛利率 四象限分布')}
-    <div class="card-bd"><div class="scatter-plot quad" id="quadPlot"></div>
-      <div class="scatter-legend">
-        <span><i style="background:#dc2626"></i>高风险高利润</span>
-        <span><i style="background:#059669"></i>低风险高利润</span>
-        <span><i style="background:#d97706"></i>高风险低利润</span>
-        <span><i style="background:#64748b"></i>低风险低利润</span>
-      </div></div></div>
-
-  <div class="card fade-in">${cardHead('S', '资金需求紧迫度排行', '综合融资用途+资金缺口+淡旺季评分')}
-    <div class="card-bd"><div class="bars" id="fundRank"></div></div></div>
-
-  <div class="card fade-in">${cardHead('T', '监管强度地图', '各行业必备证照数量统计')}
-    <div class="card-bd"><div class="bars" id="licenseRank"></div></div></div>
-
-  <div class="card fade-in">${cardHead('U', '职业群组聚类', '按薪资水平和市场需求四象限分组')}
-    <div class="card-bd"><div class="scatter-plot" id="jobCluster"></div>
-      <div class="scatter-legend">
-        <span><i style="background:#dc2626"></i>高薪高需求</span>
-        <span><i style="background:#059669"></i>低薪高需求</span>
-        <span><i style="background:#64748b"></i>高薪低需求</span>
-        <span><i style="background:#94a3b8"></i>低薪低需求</span>
-      </div></div></div>
+  <div class="ana-panel" data-panel="overview" hidden>
+    <div class="card fade-in">${cardHead('H', '数据覆盖完整性', '逐行业核对职业/经营模式/城市风险是否齐全')}
+      <div class="card-bd" id="covBox"></div></div>
+  </div>
   `;
+
+  // 标签切换
+  $$('.ana-tab', c).forEach(btn => {
+    btn.onclick = () => {
+      $$('.ana-tab', c).forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      const tab = btn.dataset.tab;
+      $$('.ana-panel', c).forEach(p => { p.hidden = p.dataset.panel !== tab; });
+    };
+  });
 
   // 热力矩阵
   (function() {
@@ -1225,6 +1275,7 @@ function pageAnalytics(c) {
     }
     h += '</tbody></table>';
     $('#crossJob').innerHTML = h;
+    const cj2 = $('#crossJob2'); if (cj2) cj2.innerHTML = h;
   })();
 
   // O 职业审核难度评估
@@ -1253,6 +1304,10 @@ function pageAnalytics(c) {
     })).sort((a,b) => b.factor - a.factor);
     const mx = Math.max(1, ...entries.map(x => x.nominal));
     $('#cityPP').innerHTML = entries.map(x => `<div class="bar-row ${x.factor >= 1.4 ? 'red' : x.factor >= 1.1 ? 'gold' : 'green'}">
+      <div class="bl">${esc(x.city)}</div>
+      <div class="bt"><div class="bf" style="width:${(x.nominal/mx*100).toFixed(1)}%;background:linear-gradient(90deg,#3b82f6,#2563eb)"></div></div>
+      <div class="bv">${(x.nominal/1000).toFixed(1)}k <small style="color:#94a3b8;font-weight:400">系数${x.factor}</small></div></div>`).join('');
+    const cp2 = $('#cityPP2'); if (cp2) cp2.innerHTML = entries.map(x => `<div class="bar-row ${x.factor >= 1.4 ? 'red' : x.factor >= 1.1 ? 'gold' : 'green'}">
       <div class="bl">${esc(x.city)}</div>
       <div class="bt"><div class="bf" style="width:${(x.nominal/mx*100).toFixed(1)}%;background:linear-gradient(90deg,#3b82f6,#2563eb)"></div></div>
       <div class="bv">${(x.nominal/1000).toFixed(1)}k <small style="color:#94a3b8;font-weight:400">系数${x.factor}</small></div></div>`).join('');
@@ -1591,18 +1646,13 @@ function pageDataUpdate(c) {
       </div>
     </div>
 
-    <div class="card fade-in">${cardHead('🔄', '数据自动更新机制', '通过 GitHub Actions 定期更新数据')}
+    <div class="card fade-in">${cardHead('🔄', '数据自动更新', '系统每周自动更新数据')}
       <div class="card-bd">
-        <p class="hint" style="margin-bottom:14px">本知识库通过 GitHub Actions 定时任务自动更新薪资和行业数据，更新流程如下：</p>
-        <div class="bars">
-          <div class="bar-row"><div class="bl" style="width:140px;text-align:left">① 定时触发</div><div class="bt"><div class="bf" style="width:100%"></div></div><div class="bv">每周一 06:00（北京时间）</div></div>
-          <div class="bar-row gold"><div class="bl" style="width:140px;text-align:left">② 数据更新</div><div class="bt"><div class="bf" style="width:100%"></div></div><div class="bv">运行 auto_update.py</div></div>
-          <div class="bar-row green"><div class="bl" style="width:140px;text-align:left">③ 生成数据</div><div class="bt"><div class="bf" style="width:100%"></div></div><div class="bv">重新生成 data1-6.js</div></div>
-          <div class="bar-row"><div class="bl" style="width:140px;text-align:left">④ 自动部署</div><div class="bt"><div class="bf" style="width:100%"></div></div><div class="bv">GitHub Pages 自动构建</div></div>
-        </div>
-        <div style="margin-top:14px;padding:12px 14px;background:#f8fafc;border-radius:8px;border-left:3px solid var(--c-brand)">
+        <p class="hint" style="margin-bottom:14px">本知识库每周自动更新薪资和行业数据，无需手动操作。</p>
+        <div style="padding:12px 14px;background:#f0fdf4;border-radius:8px;border-left:3px solid #059669">
           <p class="hint" style="margin:0">当前数据版本：<b>${lastUpdate}</b><br>
-          如需手动更新，请在 GitHub 仓库 <code style="background:#e2e8f0;padding:2px 6px;border-radius:4px">gaoyuxinba/xwk-knowledge-base</code> 的 Actions 页面点击 <b>Run workflow</b>。</p>
+          更新频率：每周一次（周一）<br>
+          数据来源：国家统计局 + 各地人社局</p>
         </div>
       </div>
     </div>
