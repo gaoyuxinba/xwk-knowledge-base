@@ -254,11 +254,46 @@ function pageDashboard(c) {
 
   c.innerHTML = `
     <div class="dash-stats">
-      <div class="stat-card blue"><div class="stat-ico">🏢</div><div class="stat-val">${inds.length}</div><div class="stat-lbl">细分行业</div><div class="stat-sub">${catCount}个门类</div></div>
-      <div class="stat-card green"><div class="stat-ico">👥</div><div class="stat-val">${jobs.length}</div><div class="stat-lbl">职业岗位</div><div class="stat-sub">${highDemand}个高需求</div></div>
-      <div class="stat-card purple"><div class="stat-ico">🏙</div><div class="stat-val">${cities.length}</div><div class="stat-lbl">覆盖城市</div><div class="stat-sub">${risks.length}条风险</div></div>
-      <div class="stat-card orange"><div class="stat-ico">💰</div><div class="stat-val">${(avgSalary/1000).toFixed(1)}k</div><div class="stat-lbl">平均月薪</div><div class="stat-sub">基准中位数</div></div>
-      <div class="stat-card red"><div class="stat-ico">⚠</div><div class="stat-val">${highRisk}</div><div class="stat-lbl">高风险记录</div><div class="stat-sub">D-E级</div></div>
+      <div class="stat-card s-blue">
+        <div class="stat-glow"></div>
+        <div class="stat-top"><div class="stat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/><path d="M9 9v.01M9 12v.01M9 15v.01M9 18v.01"/></svg></div><div class="stat-tag">行业</div></div>
+        <div class="stat-val">${inds.length}</div>
+        <div class="stat-lbl">细分行业</div>
+        <div class="stat-spark"><div class="sp-bar" style="height:40%"></div><div class="sp-bar" style="height:65%"></div><div class="sp-bar" style="height:50%"></div><div class="sp-bar" style="height:80%"></div><div class="sp-bar" style="height:60%"></div><div class="sp-bar" style="height:100%"></div></div>
+        <div class="stat-sub">${catCount}个门类</div>
+      </div>
+      <div class="stat-card s-green">
+        <div class="stat-glow"></div>
+        <div class="stat-top"><div class="stat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><div class="stat-tag">职业</div></div>
+        <div class="stat-val">${jobs.length}</div>
+        <div class="stat-lbl">职业岗位</div>
+        <div class="stat-spark"><div class="sp-bar" style="height:55%"></div><div class="sp-bar" style="height:70%"></div><div class="sp-bar" style="height:45%"></div><div class="sp-bar" style="height:90%"></div><div class="sp-bar" style="height:75%"></div><div class="sp-bar" style="height:85%"></div></div>
+        <div class="stat-sub">${highDemand}个高需求</div>
+      </div>
+      <div class="stat-card s-purple">
+        <div class="stat-glow"></div>
+        <div class="stat-top"><div class="stat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div><div class="stat-tag">城市</div></div>
+        <div class="stat-val">${cities.length}</div>
+        <div class="stat-lbl">覆盖城市</div>
+        <div class="stat-spark"><div class="sp-bar" style="height:60%"></div><div class="sp-bar" style="height:50%"></div><div class="sp-bar" style="height:85%"></div><div class="sp-bar" style="height:70%"></div><div class="sp-bar" style="height:95%"></div><div class="sp-bar" style="height:55%"></div></div>
+        <div class="stat-sub">${risks.length}条风险记录</div>
+      </div>
+      <div class="stat-card s-orange">
+        <div class="stat-glow"></div>
+        <div class="stat-top"><div class="stat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div class="stat-tag">薪资</div></div>
+        <div class="stat-val">${(avgSalary/1000).toFixed(1)}<span class="stat-unit">k</span></div>
+        <div class="stat-lbl">平均月薪</div>
+        <div class="stat-spark"><div class="sp-bar" style="height:35%"></div><div class="sp-bar" style="height:50%"></div><div class="sp-bar" style="height:60%"></div><div class="sp-bar" style="height:75%"></div><div class="sp-bar" style="height:85%"></div><div class="sp-bar" style="height:100%"></div></div>
+        <div class="stat-sub">基准中位数</div>
+      </div>
+      <div class="stat-card s-red">
+        <div class="stat-glow"></div>
+        <div class="stat-top"><div class="stat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><div class="stat-tag">风控</div></div>
+        <div class="stat-val">${highRisk}</div>
+        <div class="stat-lbl">高风险记录</div>
+        <div class="stat-spark"><div class="sp-bar" style="height:30%"></div><div class="sp-bar" style="height:45%"></div><div class="sp-bar" style="height:25%"></div><div class="sp-bar" style="height:60%"></div><div class="sp-bar" style="height:40%"></div><div class="sp-bar" style="height:35%"></div></div>
+        <div class="stat-sub">D-E级</div>
+      </div>
     </div>
 
     <div class="qbar">
