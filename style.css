@@ -537,6 +537,22 @@ table.heat td.c:hover{outline:2px solid var(--c-brand-2);outline-offset:-2px}
 .quad-line-v{position:absolute;top:0;bottom:0;width:1px;background:#cbd5e1;border-left:1px dashed #94a3b8;pointer-events:none}
 .quad-line-h{position:absolute;left:0;right:0;height:1px;background:#cbd5e1;border-top:1px dashed #94a3b8;pointer-events:none}
 
+/* ======================= 职业群组聚类 ======================= */
+.job-cluster{display:flex;flex-direction:column;gap:14px}
+.cluster-group{display:flex;flex-direction:column;gap:6px}
+.cluster-label{font-size:13px;font-weight:600;color:var(--c-tx-1);padding:4px 0 4px 10px;border-left:3px solid #059669;display:flex;align-items:center;gap:8px}
+.cluster-label small{font-size:11px}
+.cluster-jobs{display:flex;flex-direction:column;gap:4px}
+.cluster-job{display:flex;align-items:center;gap:8px;height:24px}
+.cj-name{flex:0 0 120px;font-size:11.5px;color:var(--c-tx-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right}
+.cj-bar{flex:1;position:relative;height:14px;background:#f1f5f9;border-radius:3px;overflow:visible}
+.cj-range{position:absolute;top:2px;bottom:2px;border-radius:3px;opacity:.35;min-width:4px}
+.cj-med{position:absolute;top:50%;width:8px;height:8px;border-radius:50%;background:#fff;border:2px solid #059669;transform:translate(-50%,-50%);z-index:2;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.cj-sal{flex:0 0 42px;font-size:11px;color:var(--c-tx-3);font-weight:600;text-align:right}
+.cluster-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:11.5px;color:var(--c-tx-2)}
+.cluster-legend span{display:flex;align-items:center;gap:5px}
+.cluster-legend i{display:inline-block;width:10px;height:10px;border-radius:50%}
+
 /* ======================= 日历热力图 ======================= */
 .cal-tbl{width:100%;border-collapse:collapse;font-size:11px}
 .cal-tbl th{padding:5px 3px;text-align:center;font-weight:600;color:var(--c-tx-2);border-bottom:1px solid var(--c-line);background:#f8fafc;position:sticky;top:0}
