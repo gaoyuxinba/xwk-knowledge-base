@@ -1556,19 +1556,36 @@ function pageDataUpdate(c) {
       </div>
     </div>
 
-    <div class="card fade-in">${cardHead('🔄', '数据自动更新机制', '通过 GitHub Actions 定期抓取和更新数据')}
+    <div class="card fade-in">${cardHead('🔄', '数据自动更新机制', '通过 GitHub Actions 定期更新数据')}
       <div class="card-bd">
-        <p class="hint" style="margin-bottom:14px">本知识库支持通过 GitHub Actions 定时任务自动抓取和更新职业薪资数据。更新流程如下：</p>
+        <p class="hint" style="margin-bottom:14px">本知识库通过 GitHub Actions 定时任务自动更新薪资和行业数据，更新流程如下：</p>
         <div class="bars">
-          <div class="bar-row"><div class="bl" style="width:140px;text-align:left">① 定时触发</div><div class="bt"><div class="bf" style="width:100%"></div></div><div class="bv">每周一 06:00</div></div>
-          <div class="bar-row gold"><div class="bl" style="width:140px;text-align:left">② 数据抓取</div><div class="bt"><div class="bf" style="width:100%"></div></div><div class="bv">公开数据源</div></div>
-          <div class="bar-row green"><div class="bl" style="width:140px;text-align:left">③ 数据合并</div><div class="bt"><div class="bf" style="width:100%"></div></div><div class="bv">增量更新</div></div>
-          <div class="bar-row"><div class="bl" style="width:140px;text-align:left">④ 自动部署</div><div class="bt"><div class="bf" style="width:100%"></div></div><div class="bv">GitHub Pages</div></div>
+          <div class="bar-row"><div class="bl" style="width:140px;text-align:left">① 定时触发</div><div class="bt"><div class="bf" style="width:100%"></div></div><div class="bv">每周一 06:00（北京时间）</div></div>
+          <div class="bar-row gold"><div class="bl" style="width:140px;text-align:left">② 数据更新</div><div class="bt"><div class="bf" style="width:100%"></div></div><div class="bv">运行 auto_update.py</div></div>
+          <div class="bar-row green"><div class="bl" style="width:140px;text-align:left">③ 生成数据</div><div class="bt"><div class="bf" style="width:100%"></div></div><div class="bv">重新生成 data1-6.js</div></div>
+          <div class="bar-row"><div class="bl" style="width:140px;text-align:left">④ 自动部署</div><div class="bt"><div class="bf" style="width:100%"></div></div><div class="bv">GitHub Pages 自动构建</div></div>
         </div>
         <div style="margin-top:14px;padding:12px 14px;background:#f8fafc;border-radius:8px;border-left:3px solid var(--c-brand)">
           <p class="hint" style="margin:0">当前数据版本：<b>${lastUpdate}</b><br>
-          数据来源：小微行业知识库看板V3.xlsx + 薪资基准模型估算<br>
-          如需手动更新数据，请在 GitHub 仓库 <code style="background:#e2e8f0;padding:2px 6px;border-radius:4px">gaoyuxinba/xwk-knowledge-base</code> 的 Actions 页面手动触发工作流。</p>
+          如需手动更新，请在 GitHub 仓库 <code style="background:#e2e8f0;padding:2px 6px;border-radius:4px">gaoyuxinba/xwk-knowledge-base</code> 的 Actions 页面点击 <b>Run workflow</b>。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card fade-in">${cardHead('💰', '薪资数据来源说明', '当前薪资数据的获取渠道和计算方法')}
+      <div class="card-bd">
+        <table class="tbl">
+          <thead><tr><th>数据源</th><th>来源说明</th><th>用途</th><th>更新频率</th></tr></thead>
+          <tbody>
+            <tr><td>国家统计局</td><td>2025年分行业平均工资（城镇非私营单位）</td><td>行业基准薪资</td><td>年度</td></tr>
+            <tr><td>各地人社局</td><td>20个城市2025年企业工资价位</td><td>城市薪资系数</td><td>年度</td></tr>
+            <tr><td>行业增长率</td><td>统计局2025年分行业工资同比增长率</td><td>年度趋势推算</td><td>年度</td></tr>
+            <tr><td>职位倍数</td><td>基于人社局职位工资价位</td><td>职位间薪资差异</td><td>半年</td></tr>
+          </tbody>
+        </table>
+        <div style="margin-top:12px;padding:12px 14px;background:#f0fdf4;border-radius:8px;border-left:3px solid #059669">
+          <p class="hint" style="margin:0"><b>计算方法</b>：行业基准薪资 × 职位倍数 = 基准月薪；基准月薪 × 城市系数 = 城市薪资；按行业年增长率推算2020-2026年趋势。<br>
+          <b>数据特点</b>：各行业增长率不同（+1.9%~+10.3%），各城市系数不同（北京1.85 vs 重庆0.94），体现真实差异。</p>
         </div>
       </div>
     </div>
@@ -1586,19 +1603,6 @@ function pageDataUpdate(c) {
             <tr><td>城市信息</td><td>${m.city_count}</td><td>2个字段（城市名称、定位标签）</td><td>年度</td></tr>
           </tbody>
         </table>
-      </div>
-    </div>
-
-    <div class="card fade-in">${cardHead('💡', '数据补充建议', '可扩展的数据维度和来源')}
-      <div class="card-bd">
-        <div class="bars">
-          <div class="bar-row green"><div class="bl" style="width:180px;text-align:left">招聘平台薪资</div><div class="bt"><div class="bf" style="width:85%"></div></div><div class="bv">Boss直聘/智联</div></div>
-          <div class="bar-row green"><div class="bl" style="width:180px;text-align:left">政府统计数据</div><div class="bt"><div class="bf" style="width:70%"></div></div><div class="bv">统计局/人社局</div></div>
-          <div class="bar-row gold"><div class="bl" style="width:180px;text-align:left">行业报告</div><div class="bt"><div class="bf" style="width:60%"></div></div><div class="bv">研究院/协会</div></div>
-          <div class="bar-row gold"><div class="bl" style="width:180px;text-align:left">企业招聘信息</div><div class="bt"><div class="bf" style="width:50%"></div></div><div class="bv">天眼查/企查查</div></div>
-          <div class="bar-row"><div class="bl" style="width:180px;text-align:left">职业培训信息</div><div class="bt"><div class="bf" style="width:40%"></div></div><div class="bv">培训机构</div></div>
-        </div>
-        <p class="hint" style="margin-top:12px">以上数据源均可通过 GitHub Actions 定时抓取脚本自动获取并合并到知识库中，持续丰富职业和行业信息。</p>
       </div>
     </div>
   `;
