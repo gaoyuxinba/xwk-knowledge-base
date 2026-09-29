@@ -1315,7 +1315,7 @@ function pageAnalytics(c) {
 
   // O 职业审核难度评估
   (function() {
-    const indMap = new Map(industries.map(i => [i['行业编号'], i]));
+    const indMap = new Map(inds.map(i => [i['行业编号'], i]));
     const scored = jobs.map(j => {
       const evidence = String(j['能查到哪些证据'] || '');
       const flaws = String(j['没干过的破绽'] || '');
