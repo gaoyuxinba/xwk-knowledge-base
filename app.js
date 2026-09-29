@@ -1076,66 +1076,125 @@ function pageAnaJob(c) {
     $('#auditDiff').innerHTML = `<div class="bars">${top.map(x => `<div class="bar-row ${x.score >= 40 ? 'green' : x.score >= 25 ? 'gold' : 'red'}"><div class="bl" title="${esc(x.cat)}">${esc(x.jn)}<small style="display:block;color:#94a3b8;font-size:10px;font-weight:400">${esc(x.cat)}</small></div><div class="bt"><div class="bf" style="width:${(x.score/mx*100).toFixed(1)}%"></div></div><div class="bv">${x.score}分 <small style="color:#94a3b8;font-weight:400">证据${x.eCount}·破绽${x.fCount}</small></div></div>`).join('')}</div>`;
   })();
 
-  // U 职业群组聚类 - 按职位名合并，显示跨行业薪资范围
+  // U 职业群组聚类 - 双视图：合并视图 + 行业展开视图
   (function() {
-    // 按职位名合并：同职位跨行业取薪资区间、最高需求、统计覆盖行业数
-    const jobMap = {};
+    // 1. 准备原始数据（按行业展开）
+    const allJobs = [];
     for (const [k, s] of Object.entries(DB.salary)) {
       if (!s || !s.monthly_median) continue;
       const name = k.split('|')[1] || k;
       const code = k.split('|')[0] || '';
       const ind = DB.industries ? DB.industries.find(i => i['行业编号'] === code) : null;
       const cat = ind ? ind['行业门类'] : code;
-      if (!jobMap[name]) {
-        jobMap[name] = {
-          name, min: s.monthly_min || s.monthly_median * 0.75,
-          max: s.monthly_max || s.monthly_median * 1.35,
-          medians: [], industries: new Set(), categories: new Set(),
-          demand: s.demand || '中'
+      allJobs.push({
+        name, code, cat,
+        min: s.monthly_min || s.monthly_median * 0.75,
+        median: s.monthly_median,
+        max: s.monthly_max || s.monthly_median * 1.35,
+        demand: s.demand || '中'
+      });
+    }
+    if (!allJobs.length) { $('#jobCluster').innerHTML = '<p class="hint">暂无数据</p>'; return; }
+
+    // 2. 按职位名合并数据
+    const jobMap = {};
+    for (const j of allJobs) {
+      if (!jobMap[j.name]) {
+        jobMap[j.name] = {
+          name: j.name, min: j.min, max: j.max,
+          medians: [], items: [], demand: j.demand
         };
       }
-      const j = jobMap[name];
-      const mn = s.monthly_min || s.monthly_median * 0.75;
-      const mx = s.monthly_max || s.monthly_median * 1.35;
-      if (mn < j.min) j.min = mn;
-      if (mx > j.max) j.max = mx;
-      j.medians.push(s.monthly_median);
-      j.industries.add(code);
-      j.categories.add(cat);
-      // 需求：只要有一个行业是高需求，就标为高
-      if (s.demand === '高') j.demand = '高';
+      const m = jobMap[j.name];
+      if (j.min < m.min) m.min = j.min;
+      if (j.max > m.max) m.max = j.max;
+      m.medians.push(j.median);
+      m.items.push(j);
+      if (j.demand === '高') m.demand = '高';
     }
     const merged = Object.values(jobMap).map(j => ({
       ...j,
       median: Math.round(j.medians.reduce((a,b) => a+b, 0) / j.medians.length),
-      indCount: j.industries.size,
-      catCount: j.categories.size,
+      indCount: j.items.length,
     }));
-    if (!merged.length) { $('#jobCluster').innerHTML = '<p class="hint">暂无数据</p>'; return; }
-    
-    const groups = { '高': [], '中': [], '低': [] };
-    for (const j of merged) { (groups[j.demand] || (groups[j.demand] = groups['中'])).push(j); }
+
     const demandOrder = ['高', '中', '低'];
     const demandColors = { '高': '#dc2626', '中': '#059669', '低': '#64748b' };
-    const allMax = Math.max(...merged.map(j => j.max), 1);
-    let h = '';
-    for (const d of demandOrder) {
-      const jobs = groups[d] || [];
-      if (!jobs.length) continue;
-      jobs.sort((a, b) => b.median - a.median);
-      const top = jobs.slice(0, 12);
-      h += `<div class="cluster-group"><div class="cluster-label" style="border-left-color:${demandColors[d]}">${d}需求 <small style="color:#94a3b8;font-weight:400">${jobs.length} 个职位（合并去重）· 显示前${top.length}</small></div><div class="cluster-jobs">`;
-      for (const j of top) {
-        const leftPct = (j.min / allMax * 100).toFixed(1);
-        const widthPct = Math.max(2, ((j.max - j.min) / allMax * 100)).toFixed(1);
-        const medPct = (j.median / allMax * 100).toFixed(1);
-        const catList = Array.from(j.categories).slice(0, 2).join('、') + (j.catCount > 2 ? '…' : '');
-        const title = `${j.name}\n薪资范围: ${j.min}~${j.max}\n中位数: ${j.median}\n覆盖行业: ${j.indCount}个 (${catList})\n需求: ${j.demand}`;
-        h += `<div class="cluster-job" title="${esc(title)}"><div class="cj-name">${esc(j.name)}<small class="cj-tag">${j.indCount}行业</small></div><div class="cj-bar"><div class="cj-range" style="left:${leftPct}%;width:${widthPct}%;background:${demandColors[d]}"></div><div class="cj-med" style="left:${medPct}%;border-color:${demandColors[d]}"></div></div><div class="cj-sal">${(j.median / 1000).toFixed(1)}k</div></div>`;
+
+    // 3. 渲染函数：合并视图
+    function renderMerged() {
+      const groups = { '高': [], '中': [], '低': [] };
+      for (const j of merged) { (groups[j.demand] || (groups[j.demand] = groups['中'])).push(j); }
+      const allMax = Math.max(...merged.map(j => j.max), 1);
+      let h = '';
+      for (const d of demandOrder) {
+        const jobs = groups[d] || [];
+        if (!jobs.length) continue;
+        jobs.sort((a, b) => b.median - a.median);
+        const top = jobs.slice(0, 12);
+        h += `<div class="cluster-group"><div class="cluster-label" style="border-left-color:${demandColors[d]}">${d}需求 <small style="color:#94a3b8;font-weight:400">${jobs.length} 个职位（合并去重）· 显示前${top.length}</small></div><div class="cluster-jobs">`;
+        for (const j of top) {
+          const leftPct = (j.min / allMax * 100).toFixed(1);
+          const widthPct = Math.max(2, ((j.max - j.min) / allMax * 100)).toFixed(1);
+          const medPct = (j.median / allMax * 100).toFixed(1);
+          const cats = [...new Set(j.items.map(i => i.cat))];
+          const catList = cats.slice(0, 2).join('、') + (cats.length > 2 ? '…' : '');
+          const title = `${j.name}\n薪资范围: ${j.min}~${j.max}\n中位数: ${j.median}\n覆盖行业: ${j.indCount}个 (${catList})\n需求: ${j.demand}`;
+          h += `<div class="cluster-job" title="${esc(title)}"><div class="cj-name">${esc(j.name)}<small class="cj-tag">${j.indCount}行业</small></div><div class="cj-bar"><div class="cj-range" style="left:${leftPct}%;width:${widthPct}%;background:${demandColors[d]}"></div><div class="cj-med" style="left:${medPct}%;border-color:${demandColors[d]}"></div></div><div class="cj-sal">${(j.median / 1000).toFixed(1)}k</div></div>`;
+        }
+        h += '</div></div>';
       }
-      h += '</div></div>';
+      return h;
     }
-    $('#jobCluster').innerHTML = `<div class="job-cluster">${h}</div>`;
+
+    // 4. 渲染函数：行业展开视图（按职位名分组，展开显示各行业）
+    function renderExpanded() {
+      const groups = { '高': [], '中': [], '低': [] };
+      for (const j of merged) { (groups[j.demand] || (groups[j.demand] = groups['中'])).push(j); }
+      const allMax = Math.max(...allJobs.map(j => j.max), 1);
+      let h = '';
+      for (const d of demandOrder) {
+        const jobs = groups[d] || [];
+        if (!jobs.length) continue;
+        jobs.sort((a, b) => b.median - a.median);
+        const top = jobs.slice(0, 8);  // 展开视图显示更少的职位组，但每个组内有详情
+        h += `<div class="cluster-group"><div class="cluster-label" style="border-left-color:${demandColors[d]}">${d}需求 <small style="color:#94a3b8;font-weight:400">${jobs.length} 个职位组 · 显示前${top.length}组（展开各行业）</small></div><div class="cluster-jobs">`;
+        for (const j of top) {
+          // 组标题行
+          const leftPct = (j.min / allMax * 100).toFixed(1);
+          const widthPct = Math.max(2, ((j.max - j.min) / allMax * 100)).toFixed(1);
+          const medPct = (j.median / allMax * 100).toFixed(1);
+          const title = `${j.name}（共${j.indCount}个行业）\n薪资范围: ${j.min}~${j.max}\n中位数: ${j.median}\n需求: ${j.demand}`;
+          h += `<div class="cluster-job cj-group-head" title="${esc(title)}"><div class="cj-name"><b>${esc(j.name)}</b><small class="cj-tag">${j.indCount}行业</small></div><div class="cj-bar"><div class="cj-range" style="left:${leftPct}%;width:${widthPct}%;background:${demandColors[d]};opacity:.45"></div><div class="cj-med" style="left:${medPct}%;border-color:${demandColors[d]}"></div></div><div class="cj-sal"><b>${(j.median / 1000).toFixed(1)}k</b></div></div>`;
+          // 组内各行职位（按薪资排序）
+          const items = [...j.items].sort((a, b) => b.median - a.median);
+          for (const it of items) {
+            const lPct = (it.min / allMax * 100).toFixed(1);
+            const wPct = Math.max(2, ((it.max - it.min) / allMax * 100)).toFixed(1);
+            const mPct = (it.median / allMax * 100).toFixed(1);
+            const itTitle = `${it.name} · ${it.cat}\n行业: ${it.code}\n薪资: ${it.min}~${it.max}\n中位数: ${it.median}\n需求: ${it.demand}`;
+            h += `<div class="cluster-job cj-sub" title="${esc(itTitle)}"><div class="cj-name"><span class="cj-dot" style="background:${demandColors[d]}"></span>${esc(it.cat)}</div><div class="cj-bar"><div class="cj-range" style="left:${lPct}%;width:${wPct}%;background:${demandColors[d]};opacity:.6"></div><div class="cj-med sm" style="left:${mPct}%;border-color:${demandColors[d]}"></div></div><div class="cj-sal" style="color:#64748b">${(it.median / 1000).toFixed(1)}k</div></div>`;
+          }
+        }
+        h += '</div></div>';
+      }
+      return h;
+    }
+
+    // 5. 初始渲染 + 视图切换
+    let viewMode = 'merged'; // merged | expanded
+    function render() {
+      const h = viewMode === 'merged' ? renderMerged() : renderExpanded();
+      const toggleBtn = `<div class="cluster-toggle">
+        <button class="ct-btn ${viewMode === 'merged' ? 'on' : ''}" data-view="merged">合并视图</button>
+        <button class="ct-btn ${viewMode === 'expanded' ? 'on' : ''}" data-view="expanded">行业展开</button>
+      </div>`;
+      $('#jobCluster').innerHTML = toggleBtn + `<div class="job-cluster">${h}</div>`;
+      $$('.ct-btn', $('#jobCluster')).forEach(btn => {
+        btn.onclick = () => { viewMode = btn.dataset.view; render(); };
+      });
+    }
+    render();
   })();
 }
 
