@@ -4,8 +4,9 @@
 1. 从国家统计局获取最新分行业平均工资数据
 2. 从各地人社局获取最新工资价位数据
 3. 更新seed.json中的薪资和城市系数
-4. 重新生成data1-6.js文件
-5. 自动提交到GitHub仓库
+4. 标准化风险层级为A/B/C/D格式
+5. 重新生成data1-6.js文件
+6. 自动提交到GitHub仓库
 
 注意：此脚本在GitHub Actions的Ubuntu环境运行，路径需使用相对路径
 """
@@ -24,6 +25,48 @@ def fetch_url(url, timeout=30):
     except Exception as e:
         print(f"  Warning: Failed to fetch {url}: {e}")
         return None
+
+def normalize_risk_level(lv):
+    """将旧格式风险层级标准化为A/B/C/D"""
+    if not lv:
+        return 'C'
+    lv = str(lv).strip()
+    if lv in ('A', 'B', 'C', 'D'):
+        return lv
+    if lv.startswith('A-B') or lv.startswith('A-'):
+        return 'A'
+    if lv.startswith('B-C') or lv.startswith('B-'):
+        return 'B'
+    if lv.startswith('C-D') or lv.startswith('C-'):
+        return 'C'
+    if lv.startswith('D-E') or lv.startswith('D-') or lv.startswith('E'):
+        return 'D'
+    m = re.match(r'^([A-D])', lv)
+    if m:
+        return m.group(1)
+    if '高' in lv and '低' not in lv:
+        return 'D'
+    if '中等' in lv or '中高' in lv:
+        return 'C'
+    if '中低' in lv or '低' in lv:
+        return 'B'
+    return 'C'
+
+def normalize_all_risks(data):
+    """标准化所有风险层级数据"""
+    risks = data.get('city_risks', [])
+    fixed = 0
+    for r in risks:
+        old = r.get('风险层级', '')
+        new = normalize_risk_level(old)
+        if old != new:
+            fixed += 1
+            r['风险层级'] = new
+    if fixed > 0:
+        print(f"  风险层级标准化: 修复 {fixed} 条记录")
+    else:
+        print(f"  风险层级标准化: 全部已是A/B/C/D格式，无需修复")
+    return data
 
 def update_salary_data():
     """从公开数据源更新薪资数据"""
@@ -230,5 +273,6 @@ def generate_js_files(data):
 if __name__ == '__main__':
     print("开始数据更新 - " + datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     data = update_salary_data()
+    data = normalize_all_risks(data)
     generate_js_files(data)
     print("\n更新完成！")
