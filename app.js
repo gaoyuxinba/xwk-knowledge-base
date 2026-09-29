@@ -228,21 +228,21 @@ function pageDashboard(c) {
     <div class="qbar">
       <div class="qbox">
         <div class="qt"><span class="n">1</span>行业查询</div>
-        <input type="text" id="qInd" placeholder="输入行业编号、名称或关键词（如 劳务、火锅、软件）" value="${esc(q.industry)}">
+        <input type="text" id="qInd" name="off-qInd" autocomplete="off" placeholder="输入行业编号、名称或关键词（如 劳务、火锅、软件）" value="${esc(q.industry)}">
         <div class="qmeta" id="mInd">输入关键词后点选下方标签</div>
         <div class="chipbar" id="chInd"></div>
         <div class="qhint" id="hInd"></div>
       </div>
       <div class="qbox">
         <div class="qt"><span class="n">2</span>职业搜索</div>
-        <input type="text" id="qJob" placeholder="输入职位关键词（如 技术员、店长、司机）" value="${esc(q.job)}" ${q.ci.size ? '' : 'disabled'}>
+        <input type="text" id="qJob" name="off-qJob" autocomplete="off" placeholder="输入职位关键词（如 技术员、店长、司机）" value="${esc(q.job)}" ${q.ci.size ? '' : 'disabled'}>
         <div class="qmeta" id="mJob">—</div>
         <div class="chipbar" id="chJob"></div>
         <div class="qhint" id="hJob"></div>
       </div>
       <div class="qbox">
         <div class="qt"><span class="n">3</span>城市筛选</div>
-        <input type="text" id="qCity" placeholder="输入城市或定位关键词（如 重庆、港口）" value="${esc(q.city)}">
+        <input type="text" id="qCity" name="off-qCity" autocomplete="off" placeholder="输入城市或定位关键词（如 重庆、港口）" value="${esc(q.city)}">
         <div class="qmeta" id="mCity">—</div>
         <div class="chipbar" id="chCity"></div>
         <div class="qhint" id="hCity"></div>
