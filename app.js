@@ -353,6 +353,7 @@ function pageDashboard(c) {
       </span>
     </div>
     <div id="dashBody"></div>
+    <div id="analyticsSection"></div>
   `;
 
   const deb = debounce(() => updateChips(), 220);
@@ -370,6 +371,7 @@ function pageDashboard(c) {
   } else {
     renderDashPreview();
   }
+  pageAnalytics($('#analyticsSection'));
 }
 
 function renderDashPreview() {
@@ -672,7 +674,7 @@ function sec04(jobs, selectedJobs) {
 
 function sec05(rows, hasInd, selectedCities) {
   if (!rows.length) {
-    return `<div class="card fade-in">${cardHead('05', '城市风险分级（A 低 → E 高）', '无匹配')}
+    return `<div class="card fade-in">${cardHead('05', '城市风险分级（A 低 → D 高）', '无匹配')}
       <div class="card-bd"><div class="empty"><span class="big">🏙</span>无匹配城市风险数据</div></div></div>`;
   }
   const body = `<div class="tbl-wrap"><table class="risk-tbl">
@@ -682,15 +684,13 @@ function sec05(rows, hasInd, selectedCities) {
       <td class="lvcell">${hasInd ? `<span class="lv ${lvClass(r['风险层级'])}">${esc(r['风险层级'] || '—')}</span>` : '<span style="color:#cbd5e1">—</span>'}</td>
       <td class="basis">${hasInd ? nl2br(r['依据与尽调要点']) : '<span style="color:#cbd5e1">请先选定行业</span>'}</td>
     </tr>`).join('')}</tbody></table></div>`;
-  return `<div class="card fade-in">${cardHead('05', '城市风险分级（A 低 → E 高）', `${rows.length} 条记录`)}
+  return `<div class="card fade-in">${cardHead('05', '城市风险分级（A 低 → D 高）', `${rows.length} 条记录`)}
     <div class="card-bd">${body}
       <div class="legend">
-        <span><i style="background:var(--lv-a-bg);border:1px solid var(--lv-a)"></i>A 低</span>
-        <span><i style="background:var(--lv-bc-bg);border:1px solid var(--lv-bc)"></i>B/B-C 中低</span>
+        <span><i style="background:var(--lv-a-bg);border:1px solid var(--lv-a)"></i>A 低风险</span>
+        <span><i style="background:var(--lv-b-bg);border:1px solid var(--lv-b)"></i>B 中低</span>
         <span><i style="background:var(--lv-c-bg);border:1px solid var(--lv-c)"></i>C 中等</span>
-        <span><i style="background:var(--lv-cd-bg);border:1px solid var(--lv-cd)"></i>C-D 中高</span>
-        <span><i style="background:var(--lv-d-bg);border:1px solid var(--lv-d)"></i>D 中高</span>
-        <span><i style="background:var(--lv-e-bg);border:1px solid var(--lv-e)"></i>E 高</span>
+        <span><i style="background:var(--lv-d-bg);border:1px solid var(--lv-d)"></i>D 高风险</span>
       </div>
     </div></div>`;
 }
@@ -825,12 +825,12 @@ function bindGroupToggles(root) {
     };
   });
 
-  // 追加分析中心内容到看板底部
-  pageAnalytics(c);
+  // 追加分析中心内容到看板底部 — 已移至 pageDashboard 统一调用
 }
 
 // ================================================================== 统计分析
 function pageAnalytics(c) {
+  if (!c) return;
   const inds = applyEdits('industries', DB.industries);
   const jobs = applyEdits('jobs', DB.jobs);
   const modes = applyEdits('modes', DB.modes);
@@ -869,7 +869,7 @@ function pageAnalytics(c) {
     if (!cityRiskMap[cn]) cityRiskMap[cn] = { total: 0, high: 0, mid: 0, low: 0 };
     cityRiskMap[cn].total++;
     const lv = r['风险层级'] || '';
-    if (lv.startsWith('D') || lv.startsWith('E') || lv.startsWith('C-D')) cityRiskMap[cn].high++;
+    if (lv.startsWith('D')) cityRiskMap[cn].high++;
     else if (lv.startsWith('C')) cityRiskMap[cn].mid++;
     else cityRiskMap[cn].low++;
   }
@@ -878,7 +878,7 @@ function pageAnalytics(c) {
 
   // 行业风险指数
   const indRisk = [];
-  const lvScore = { 'A': 1, 'B': 2, 'B-C': 2.5, 'C': 3, 'C-D': 3.5, 'D': 4, 'D-E': 4.5, 'E': 5 };
+  const lvScore = { 'A': 1, 'B': 2, 'C': 3, 'D': 4 };
   for (const ind of inds) {
     const code = ind['行业编号'];
     const indRisks = risks.filter(r => r['行业编号'] === code);
@@ -918,7 +918,7 @@ function pageAnalytics(c) {
     demandMap[s.demand] = (demandMap[s.demand] || 0) + 1;
   }
 
-  c.innerHTML += `
+  c.innerHTML = `
   <div class="stat-grid fade-in">
     <div class="stat"><div class="n">${t.行业}</div><div class="l">细分行业</div></div>
     <div class="stat g"><div class="n">${t.门类}</div><div class="l">行业门类</div></div>
@@ -1140,33 +1140,36 @@ function pageAnalytics(c) {
   $$('[data-rk]').forEach(b => { b.onclick = () => { $$('[data-rk]').forEach(x => x.classList.remove('on')); b.classList.add('on'); renderRank(b.dataset.rk); }; });
 
   // 覆盖完整性
-  const cov = inds.map(ind => {
-    const code = ind['行业编号'];
-    return {
-      '行业编号': code, '细分行业': ind['细分行业'],
-      职业数: jobs.filter(j => j['行业编号'] === code).length,
-      模式数: modes.filter(m => m['行业编号'] === code).length,
-      城市风险数: risks.filter(r => r['行业编号'] === code).length,
-    };
-  });
-  const bad = cov.filter(x => x.职业数 === 0 || x.模式数 === 0 || x.城市风险数 !== t.城市);
-  $('#covBox').innerHTML = `
-    <div class="stat-grid" style="margin-bottom:12px">
-      <div class="stat g"><div class="n">${cov.filter(x => x.职业数 > 0).length}/${cov.length}</div><div class="l">有职业数据的行业</div></div>
-      <div class="stat g"><div class="n">${cov.filter(x => x.模式数 > 0).length}/${cov.length}</div><div class="l">有经营模式的行业</div></div>
-      <div class="stat ${bad.length ? 'r' : 'g'}"><div class="n">${cov.length - bad.length}/${cov.length}</div><div class="l">三项全齐的行业</div></div>
-      <div class="stat"><div class="n">${t.职业}</div><div class="l">职业明细总条数</div></div>
-    </div>
-    ${bad.length
-      ? `<p class="hint" style="margin-bottom:8px;color:#dc2626">以下 ${bad.length} 个行业存在数据缺口：</p>
-         <div class="tbl-wrap" style="max-height:260px"><table class="tbl"><thead><tr>
-           <th>行业编号</th><th>细分行业</th><th>职业数</th><th>模式数</th><th>城市风险数</th></tr></thead>
-           <tbody>${bad.map(x => `<tr><td class="code">${esc(x['行业编号'])}</td><td>${esc(x['细分行业'])}</td>
-             <td>${x.职业数 === 0 ? '<span class="tag red">缺</span>' : x.职业数}</td>
-             <td>${x.模式数 === 0 ? '<span class="tag red">缺</span>' : x.模式数}</td>
-             <td>${x.城市风险数 !== t.城市 ? `<span class="tag gold">${x.城市风险数}/${t.城市}</span>` : x.城市风险数}</td></tr>`).join('')}</tbody></table></div>`
-      : '<p class="hint" style="color:#059669">✓ 全部行业的职业、经营模式、城市风险三项数据均齐全，无缺口。</p>'}
-  `;
+  const covEl = $('#covBox');
+  if (covEl) {
+    const cov = inds.map(ind => {
+      const code = ind['行业编号'];
+      return {
+        '行业编号': code, '细分行业': ind['细分行业'],
+        职业数: jobs.filter(j => j['行业编号'] === code).length,
+        模式数: modes.filter(m => m['行业编号'] === code).length,
+        城市风险数: risks.filter(r => r['行业编号'] === code).length,
+      };
+    });
+    const bad = cov.filter(x => x.职业数 === 0 || x.模式数 === 0 || x.城市风险数 !== t.城市);
+    covEl.innerHTML = `
+      <div class="stat-grid" style="margin-bottom:12px">
+        <div class="stat g"><div class="n">${cov.filter(x => x.职业数 > 0).length}/${cov.length}</div><div class="l">有职业数据的行业</div></div>
+        <div class="stat g"><div class="n">${cov.filter(x => x.模式数 > 0).length}/${cov.length}</div><div class="l">有经营模式的行业</div></div>
+        <div class="stat ${bad.length ? 'r' : 'g'}"><div class="n">${cov.length - bad.length}/${cov.length}</div><div class="l">三项全齐的行业</div></div>
+        <div class="stat"><div class="n">${t.职业}</div><div class="l">职业明细总条数</div></div>
+      </div>
+      ${bad.length
+        ? `<p class="hint" style="margin-bottom:8px;color:#dc2626">以下 ${bad.length} 个行业存在数据缺口：</p>
+           <div class="tbl-wrap" style="max-height:260px"><table class="tbl"><thead><tr>
+             <th>行业编号</th><th>细分行业</th><th>职业数</th><th>模式数</th><th>城市风险数</th></tr></thead>
+             <tbody>${bad.map(x => `<tr><td class="code">${esc(x['行业编号'])}</td><td>${esc(x['细分行业'])}</td>
+               <td>${x.职业数 === 0 ? '<span class="tag red">缺</span>' : x.职业数}</td>
+               <td>${x.模式数 === 0 ? '<span class="tag red">缺</span>' : x.模式数}</td>
+               <td>${x.城市风险数 !== t.城市 ? `<span class="tag gold">${x.城市风险数}/${t.城市}</span>` : x.城市风险数}</td></tr>`).join('')}</tbody></table></div>`
+        : '<p class="hint" style="color:#059669">✓ 全部行业的职业、经营模式、城市风险三项数据均齐全，无缺口。</p>'}
+    `;
+  }
 
   // I 毛利率 vs 净利率散点图
   (function() {
@@ -1358,7 +1361,7 @@ function pageAnalytics(c) {
 
   // R 风险-利润象限图
   (function() {
-    const lvScore2 = { 'A': 1, 'B': 2, 'B-C': 2.5, 'C': 3, 'C-D': 3.5, 'D': 4, 'D-E': 4.5, 'E': 5 };
+    const lvScore2 = { 'A': 1, 'B': 2, 'C': 3, 'D': 4 };
     const parsePct2 = (s) => { const m = String(s||'').match(/(\d+(?:\.\d+)?)/); return m ? Number(m[0]) : null; };
     const pts = indRisk.filter(x => {
       const ind = inds.find(i => i['行业编号'] === x['行业编号']);
