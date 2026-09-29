@@ -11,9 +11,12 @@ const DB = {
   modes: window.XWK_DATA_1 ? window.XWK_DATA_1.modes : [],
   cities: window.XWK_DATA_1 ? window.XWK_DATA_1.cities : [],
   jobs: window.XWK_DATA_2 ? window.XWK_DATA_2.jobs : [],
-  city_risks: window.XWK_DATA_3 ? window.XWK_DATA_3.city_risks : [],
-  salary: window.XWK_DATA_4 ? window.XWK_DATA_4.salary : {},
-  city_factors: window.XWK_DATA_4 ? window.XWK_DATA_4.city_factors : {},
+  city_risks: [
+    ...(window.XWK_DATA_3 ? window.XWK_DATA_3.city_risks : []),
+    ...(window.XWK_DATA_4 ? window.XWK_DATA_4.city_risks : []),
+  ],
+  salary: window.XWK_DATA_5 ? window.XWK_DATA_5.salary : {},
+  city_factors: window.XWK_DATA_6 ? window.XWK_DATA_6.city_factors : {},
 };
 
 // localStorage 编辑覆盖层
