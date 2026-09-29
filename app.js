@@ -168,25 +168,35 @@ const ACCOUNTS = [
   { user: 'gaoyuxi', pass: 'wt1201263', name: '高宇欣', role: 'admin', can_edit: true, can_manage: true },
 ];
 
-$('#loginForm').onsubmit = (e) => {
-  e.preventDefault();
-  const u = $('#loginUser').value.trim();
-  const p = $('#loginPass').value;
+function doLogin() {
+  const u = ($('#loginUser').value || '').trim();
+  const p = ($('#loginPass').value || '');
   const acc = ACCOUNTS.find(a => a.user === u && a.pass === p);
   if (!acc) {
-    $('#loginErr').textContent = '账号或密码不正确';
-    return;
+    const errEl = $('#loginErr');
+    if (errEl) errEl.textContent = '账号或密码不正确';
+    return false;
   }
   S.user = acc;
-  $('#loginView').hidden = true;
-  $('#appView').hidden = false;
-  $('#userName').textContent = acc.name;
-  $('#userRole').textContent = acc.role === 'admin' ? '管理员' : '浏览者';
-  $('#userAvatar').textContent = acc.name[0];
-  renderNav();
-  renderMeta();
-  go('dashboard');
-};
+  const lv = $('#loginView');
+  const av = $('#appView');
+  if (lv) lv.hidden = true;
+  if (av) av.hidden = false;
+  const unEl = $('#userName');
+  const urEl = $('#userRole');
+  const uaEl = $('#userAvatar');
+  if (unEl) unEl.textContent = acc.name;
+  if (urEl) urEl.textContent = acc.role === 'admin' ? '管理员' : '浏览者';
+  if (uaEl) uaEl.textContent = acc.name[0];
+  try { renderNav(); } catch(e) { console.error('renderNav error:', e); }
+  try { renderMeta(); } catch(e) { console.error('renderMeta error:', e); }
+  try { go('dashboard'); } catch(e) { console.error('go error:', e); }
+  return false;
+}
+
+$('#loginForm').onsubmit = (e) => { e.preventDefault(); return doLogin(); };
+$('#loginBtn').onclick = (e) => { e.preventDefault(); return doLogin(); };
+$('#loginPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doLogin(); } });
 
 $('#userMenu').onclick = (e) => {
   if (e.target.dataset.act === 'logout') {
