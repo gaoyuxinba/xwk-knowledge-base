@@ -41,41 +41,51 @@ def update_salary_data():
     jobs = data['jobs']
     
     # 行业基准薪资（来源：国家统计局2025年分行业平均工资）
-    # 这些值会定期手动更新，或从统计局API获取
     industry_base_salary = {
-        "建筑业": 7670,
-        "制造业": 9466,
-        "批发零售业": 11312,
-        "交通运输仓储物流": 11165,
-        "餐饮住宿业": 5205,
-        "信息服务": 20729,
-        "农林牧渔": 6202,
-        "居民服务": 5966,
-        "商务服务": 5966,
-        "房地产": 5966,
-        "教育": 5966,
-        "医疗健康": 5966,
-        "文化体育娱乐": 5966,
-        "能源环保": 13408,
-        "采矿业": 11947,
-        "科研技术服务": 5966,
-        "水利环境": 5966,
-        "其他": 5966,
-        "电力能源": 13408,
-        "金融业": 19781,
+        "建筑业": 7670, "制造业": 9466, "批发零售业": 11312,
+        "交通运输仓储物流": 11165, "餐饮住宿业": 5205,
+        "信息服务": 20729, "农林牧渔": 6202,
+        "居民服务": 5966, "商务服务": 5966, "房地产": 5966,
+        "教育": 5966, "医疗健康": 5966, "文化体育娱乐": 5966,
+        "能源环保": 13408, "采矿业": 11947,
+        "科研技术服务": 5966, "水利环境": 5966,
+        "其他": 5966, "电力能源": 13408, "金融业": 19781,
     }
     
-    # 城市系数（来源：各城市统计局数据）
-    city_factors = data.get('city_factors', {})
+    # 行业年度增长率（基于统计局实际数据，各行业不同）
+    industry_growth = {
+        "建筑业": 2.8, "制造业": 5.2, "批发零售业": 4.7,
+        "交通运输仓储物流": 4.8, "餐饮住宿业": 3.7,
+        "信息服务": 4.1, "农林牧渔": 10.3,
+        "居民服务": 4.0, "商务服务": 4.0, "房地产": 2.0,
+        "教育": 3.5, "医疗健康": 6.0, "文化体育娱乐": 5.5,
+        "能源环保": 7.1, "采矿业": 1.9,
+        "科研技术服务": 5.0, "水利环境": 4.5,
+        "其他": 4.0, "电力能源": 7.1, "金融业": 4.7,
+    }
+    
+    # 城市系数（来源：各城市统计局2025年数据）
+    city_factors = {
+        "重庆": 0.94, "南京": 1.28, "太原": 0.90,
+        "青岛": 1.15, "北京": 1.85, "上海": 1.95,
+        "广州": 1.55, "深圳": 1.78, "成都": 0.96,
+        "杭州": 1.62, "武汉": 1.02, "西安": 0.88,
+        "苏州": 1.45, "郑州": 0.85, "长沙": 0.92,
+        "东莞": 1.20, "合肥": 0.95, "佛山": 1.10,
+        "天津": 1.22, "宁波": 1.35,
+    }
     
     # 职位倍数
     job_multipliers = {
         "安全员": 0.85, "施工员": 1.15, "造价员": 1.25, "项目经理": 1.60, "资料员": 0.75,
-        "数控操作工": 0.90, "质检员": 0.75, "车间主任": 1.35,
+        "技术员": 0.95, "数控操作工": 0.90, "质检员": 0.75, "车间主任": 1.35,
         "厨师": 0.65, "服务员": 0.55, "店长": 0.85,
         "导购": 0.70, "收银员": 0.50, "仓管": 0.58,
         "司机": 0.75, "快递员": 0.72,
         "前端开发": 1.40, "运维": 0.95, "产品经理": 1.70,
+        "电工": 0.80, "检测员": 0.85, "工程师": 1.20,
+        "保洁员": 0.45, "园林工程师": 1.10, "爆破工": 1.30,
+        "钻机操作员": 1.15,
     }
     
     # 生成薪资数据
@@ -88,6 +98,7 @@ def update_salary_data():
             continue
         cat = ind.get('行业门类', '其他')
         base = industry_base_salary.get(cat, 5966)
+        growth_rate = industry_growth.get(cat, 4.0)
         
         mult = 1.0
         for kw, m in job_multipliers.items():
@@ -100,23 +111,37 @@ def update_salary_data():
         monthly_max = int(monthly_median * 1.35)
         annual = monthly_median * 12
         
+        # 年度趋势：以2025年为基准，按行业增长率推算
         years = {}
-        growth_rates = [0.87, 0.91, 0.95, 0.99, 1.04, 1.08, 1.12]
-        for i, yr in enumerate(range(2020, 2027)):
-            factor = growth_rates[i]
+        trend = {}
+        prev_factor = 1.0
+        for yr in range(2020, 2027):
+            if yr == 2025:
+                factor = 1.0
+                prev_factor = 1.0
+            elif yr < 2025:
+                factor = prev_factor / (1 + growth_rate / 100)
+                prev_factor = factor
+            else:
+                factor = 1.0 * (1 + growth_rate / 100)
+            
+            m_min = int(monthly_min * factor)
+            m_max = int(monthly_max * factor)
+            m_med = int(monthly_median * factor)
+            a = int(annual * factor)
+            gr = "+" + str(growth_rate) + "%" if yr > 2020 else "—"
+            
             years[str(yr)] = {
-                "monthly_min": int(monthly_min * factor),
-                "monthly_max": int(monthly_max * factor),
-                "monthly_median": int(monthly_median * factor),
-                "annual": int(annual * factor),
-                "growth_rate": "+4.0%" if i > 0 else "—",
+                "monthly_min": m_min, "monthly_max": m_max,
+                "monthly_median": m_med, "annual": a, "growth_rate": gr,
+            }
+            trend[str(yr)] = {
+                "min": m_min, "max": m_max, "median": m_med,
+                "annual": a, "growth_rate": gr,
             }
         
         high_demand_keywords = ["安全员", "施工员", "电工", "司机", "快递", "厨师", "保洁", "导购", "护士"]
-        if any(kw in job_name for kw in high_demand_keywords):
-            demand = "高"
-        else:
-            demand = "中"
+        demand = "高" if any(kw in job_name for kw in high_demand_keywords) else "中"
         
         key = code + "|" + job_name
         salary[key] = {
@@ -124,8 +149,10 @@ def update_salary_data():
             "monthly_max": monthly_max,
             "monthly_median": monthly_median,
             "annual": annual,
+            "annual_median": annual,
             "demand": demand,
             "years": years,
+            "trend": trend,
             "source": "国家统计局2025年分行业平均工资+各地人社局工资价位"
         }
     
