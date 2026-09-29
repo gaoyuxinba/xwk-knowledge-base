@@ -5,6 +5,19 @@
 'use strict';
 
 // ------------------------------------------------------------------ 数据合并
+// 强制加载最新data5（带缓存清除参数）
+if (window.XWK_DATA_5 && window.XWK_DATA_5.salary) {
+  const firstKey = Object.keys(window.XWK_DATA_5.salary)[0];
+  if (firstKey && !window.XWK_DATA_5.salary[firstKey].trend) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', 'static/data5.js?cb=' + Date.now(), false);
+    xhr.send();
+    if (xhr.status === 200) {
+      try { eval(xhr.responseText); } catch(e) {}
+    }
+  }
+}
+
 const DB = {
   meta: window.XWK_DATA_1 ? window.XWK_DATA_1.meta : {},
   industries: window.XWK_DATA_1 ? window.XWK_DATA_1.industries : [],
