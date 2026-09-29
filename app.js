@@ -273,7 +273,7 @@ function pageDashboard(c) {
   const inds = DB.industries, jobs = DB.jobs, risks = DB.city_risks, salary = DB.salary;
   const cities = DB.cities;
   const catCount = new Set(inds.map(i => i['行业门类'])).size;
-  const highRisk = risks.filter(r => { const lv = String(r['风险层级']||''); return lv.startsWith('D') || lv.startsWith('E'); }).length;
+  const highRisk = risks.filter(r => { const lv = String(r['风险层级']||''); return lv.startsWith('D'); }).length;
   const highDemand = Object.values(salary).filter(s => s.demand === '高').length;
   const avgSalary = Math.round(Object.values(salary).reduce((a,s) => a + (s.monthly_median||0), 0) / Math.max(1, Object.keys(salary).length));
 
@@ -317,7 +317,7 @@ function pageDashboard(c) {
         <div class="stat-val">${highRisk}</div>
         <div class="stat-lbl">高风险记录</div>
         <div class="stat-spark"><div class="sp-bar" style="height:30%"></div><div class="sp-bar" style="height:45%"></div><div class="sp-bar" style="height:25%"></div><div class="sp-bar" style="height:60%"></div><div class="sp-bar" style="height:40%"></div><div class="sp-bar" style="height:35%"></div></div>
-        <div class="stat-sub">D-E级</div>
+        <div class="stat-sub">D级</div>
       </div>
     </div>
 
