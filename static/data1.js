@@ -1,4 +1,4 @@
-window.XWK_DATA.data = {
+window.XWK_DATA_1 = {
   "meta": {
     "source": "招聘平台行业-职位宽表 + V4.0数据重构",
     "version": "V4.3",
