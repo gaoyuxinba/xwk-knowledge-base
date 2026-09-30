@@ -438,7 +438,7 @@ function pageDashboard(c) {
   const q = S.dash;
   const inds = DB.industries, jobs = DB.jobs, risks = DB.city_risks, salary = DB.salary;
   const cities = DB.cities;
-  const catCount = new Set(inds.map(i => i['行业大类'] || i['行业门类'])).size;
+  const catCount = new Set(inds.map(i => i['行业大类'] || i['行业大类'])).size;
   const highRisk = risks.filter(r => normLv(r['风险层级']) === 'D').length;
   const highDemand = Object.values(salary).filter(s => s.demand === '高').length;
   const avgSalary = Math.round(Object.values(salary).reduce((a,s) => a + (s.monthly_median||0), 0) / Math.max(1, Object.keys(salary).length));
@@ -451,7 +451,7 @@ function pageDashboard(c) {
         <div class="stat-val">${inds.length}</div>
         <div class="stat-lbl">细分行业</div>
         <div class="stat-spark"><div class="sp-bar" style="height:40%"></div><div class="sp-bar" style="height:65%"></div><div class="sp-bar" style="height:50%"></div><div class="sp-bar" style="height:80%"></div><div class="sp-bar" style="height:60%"></div><div class="sp-bar" style="height:100%"></div></div>
-        <div class="stat-sub">${catCount}个门类</div>
+        <div class="stat-sub">${catCount}个大类</div>
       </div>
       <div class="stat-card s-green">
         <div class="stat-glow"></div>
@@ -542,9 +542,9 @@ function pageDashboard(c) {
 function renderDashPreview() {
   const industries = applyEdits('industries', DB.industries);
   const recent = industries.slice(0, 10);
-  let h = '<div class="card"><div class="card-bd"><div class="sec-h">最近行业记录（共' + industries.length + '条）</div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>行业编号</th><th>行业门类</th><th>细分行业</th><th>风险</th><th>毛利率</th></tr></thead><tbody>';
+  let h = '<div class="card"><div class="card-bd"><div class="sec-h">最近行业记录（共' + industries.length + '条）</div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>行业编号</th><th>行业大类</th><th>细分行业</th><th>风险</th><th>毛利率</th></tr></thead><tbody>';
   for (const r of recent) {
-    h += '<tr><td>' + esc(r['行业编号']) + '</td><td>' + esc(r['行业门类']) + '</td><td>' + esc(r['细分行业']) + '</td><td>' + esc(normLv(r['风险层级']) || '—') + '</td><td>' + esc(r['毛利率区间'] || '—') + '</td></tr>';
+    h += '<tr><td>' + esc(r['行业编号']) + '</td><td>' + esc(r['行业大类']) + '</td><td>' + esc(r['细分行业']) + '</td><td>' + esc(normLv(r['风险层级']) || '—') + '</td><td>' + esc(r['毛利率区间'] || '—') + '</td></tr>';
   }
   h += '</tbody></table></div><p class="hint" style="margin-top:10px">以上为前10条行业记录预览。选择筛选条件后点击「查询数据」查看完整结果。</p></div></div>';
   $('#dashBody').innerHTML = h;
@@ -562,7 +562,7 @@ function updateChips() {
     indCandidates = industries.filter(r =>
       r['行业编号'].toLowerCase().includes(kw) ||
       fuzzyMatch(r['细分行业'], kw) ||
-      fuzzyMatch(r['行业大类'] || r['行业门类'], kw) ||
+      fuzzyMatch(r['行业大类'] || r['行业大类'], kw) ||
       fuzzyMatch(r['职业标签串'] || '', kw)
     ).slice(0, 12);
   }
@@ -694,7 +694,7 @@ function renderDash() {
     html += `<div class="idbox fade-in">
       <div><div class="k">识别编号</div><div class="v code">${esc(ind['行业编号'])}</div></div>
       <div><div class="k">行业名称</div><div class="v">${esc(ind['细分行业'])}</div></div>
-      <div><div class="k">行业门类</div><div class="v">${esc(ind['行业门类'])}</div></div>
+      <div><div class="k">行业大类</div><div class="v">${esc(ind['行业大类'])}</div></div>
       <div><div class="k">职业 / 模式 / 城市</div><div class="v">${jobCount} / ${modeCount} / ${allCities.length}</div></div>
     </div>`;
   } else if (indRecords.length > 1) {
@@ -777,7 +777,7 @@ function sec01(inds, allInds) {
   for (const ind of inds) {
     const k = ind['行业编号'];
     body += `<div class="grp">
-      <div class="grp-hd"><span class="idx">◆</span>${esc(ind['细分行业'])}<span class="rt">${esc(ind['行业门类'])} · ${esc(k)}</span></div>
+      <div class="grp-hd"><span class="idx">◆</span>${esc(ind['细分行业'])}<span class="rt">${esc(ind['行业大类'])} · ${esc(k)}</span></div>
       <div class="grp-bd"><table class="kv">${F.industries_01.map(f => {
         const v = ind[f] || '';
         return `<tr><th>${esc(lb(f))}</th><td>${v ? nl2br(v) : '<span style="color:#cbd5e1">—</span>'}</td></tr>`;
@@ -885,8 +885,9 @@ function sec06(indCode, jobNames, selectedCities) {
       const adj = Math.round(sd.monthly_median * f);
       const adjMin = Math.round(sd.monthly_min * f);
       const adjMax = Math.round(sd.monthly_max * f);
-      const pp = Math.round(adj / f);
-      const ppLevel = pp >= sd.monthly_median * 1.1 ? 'high' : pp <= sd.monthly_median * 0.9 ? 'low' : 'mid';
+      const costF = cf[cn] && cf[cn].cost_factor ? cf[cn].cost_factor : 1;
+      const pp = Math.round(adj / costF);
+      const ppLevel = pp >= sd.monthly_median * 1.15 ? 'high' : pp <= sd.monthly_median * 0.85 ? 'low' : 'mid';
       return `<tr>
         <td class="city">${esc(cn)}</td>
         <td>${(adjMin/1000).toFixed(1)}k - ${(adjMax/1000).toFixed(1)}k</td>
@@ -901,7 +902,8 @@ function sec06(indCode, jobNames, selectedCities) {
       const f = cf[cn] || 1;
       const adj = Math.round(sd.monthly_median * f);
       const h = (adj / maxVal * 100).toFixed(1);
-      const pp = Math.round(adj / f);
+      const costF2 = cf[cn] && cf[cn].cost_factor ? cf[cn].cost_factor : 1;
+      const pp = Math.round(adj / costF2);
       const ppH = (pp / maxVal * 100).toFixed(1);
       return `<div class="city-bar-group">
         <div class="city-bar-pair">
@@ -973,7 +975,7 @@ function sec06(indCode, jobNames, selectedCities) {
         <span class="tag ${demandTag}">${demandText}</span>
         <span class="dl" style="margin-left:12px">年均增长率：</span>
         <span class="tag blue">${esc(sd.growth_rate)}</span>
-        <span class="dl" style="margin-left:auto;font-size:11px;color:var(--c-tx-3)">基准薪资基于行业门类模型估算，城市薪资=基准×城市系数，购买力=名义薪资÷城市系数</span>
+        <span class="dl" style="margin-left:auto;font-size:11px;color:var(--c-tx-3)">基准薪资基于行业大类模型估算，城市薪资=基准×城市系数，购买力=名义薪资÷城市系数</span>
       </div>
     </div>`;
   }).join('');
@@ -1005,14 +1007,14 @@ function getAnalyticsCtx() {
   const cities = DB.cities;
 
   const t = {
-    行业: inds.length, 门类: new Set(inds.map(r => r['行业门类'])).size,
+    行业: inds.length, 门类: new Set(inds.map(r => r['行业大类'])).size,
     职业: jobs.length, 经营模式: modes.length,
     城市: cities.length, 城市风险记录: risks.length,
   };
 
   const catMap = {};
   for (const ind of inds) {
-    const cat = ind['行业门类'] || '其他';
+    const cat = ind['行业大类'] || '其他';
     if (!catMap[cat]) catMap[cat] = { count: 0, codes: [] };
     catMap[cat].count++;
     catMap[cat].codes.push(ind['行业编号']);
@@ -1088,14 +1090,14 @@ function pageAnaIndustry(c) {
   c.innerHTML = `
   <div class="stat-grid fade-in">
     <div class="stat"><div class="n">${t.行业}</div><div class="l">细分行业</div></div>
-    <div class="stat g"><div class="n">${t.门类}</div><div class="l">行业门类</div></div>
+    <div class="stat g"><div class="n">${t.门类}</div><div class="l">行业大类</div></div>
     <div class="stat"><div class="n">${t.职业}</div><div class="l">岗位核实明细</div></div>
     <div class="stat g"><div class="n">${t.经营模式}</div><div class="l">经营模式条目</div></div>
     <div class="stat o"><div class="n">${t.城市}</div><div class="l">覆盖城市</div></div>
     <div class="stat r"><div class="n">${t.城市风险记录}</div><div class="l">行业×城市 分级记录</div></div>
   </div>
   <div class="ana-grid">
-    <div class="card fade-in">${cardHead('A', '行业门类分布', `${t.行业} 个细分行业 / ${t.门类} 个门类`)}
+    <div class="card fade-in">${cardHead('A', '行业大类分布', `${t.行业} 个细分行业 / ${t.门类} 个大类`)}
       <div class="card-bd"><div class="bars">
         ${cats.map(([n, v]) => `<div class="bar-row">
           <div class="bl" title="${esc(v.codes.join('、'))}">${esc(n)}</div>
@@ -1109,7 +1111,7 @@ function pageAnaIndustry(c) {
           <span><i style="background:#d97706"></i>中等利润</span>
           <span><i style="background:#dc2626"></i>低利润或亏损</span>
         </div></div></div>
-    <div class="card fade-in">${cardHead('J', '旺淡季日历热力图', '12个月 × 行业门类')}
+    <div class="card fade-in">${cardHead('J', '旺淡季日历热力图', '12个月 × 行业大类')}
       <div class="card-bd"><div class="cal-heat" id="calHeat"></div></div></div>
     <div class="card fade-in">${cardHead('M', '政策驱动词频分析', '政策关键词统计')}
       <div class="card-bd"><div class="bars" id="policyFreq"></div></div></div>
@@ -1139,7 +1141,7 @@ function pageAnaIndustry(c) {
     const months = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
     const catMonths = {};
     for (const ind of inds) {
-      const cat = ind['行业门类'] || '其他';
+      const cat = ind['行业大类'] || '其他';
       if (!catMonths[cat]) catMonths[cat] = new Array(12).fill(0);
       const peak = String(ind['旺季月份'] || ''); const m = peak.match(/(\d+)/g);
       if (m) for (const mo of m) { const mi = parseInt(mo)-1; if (mi>=0 && mi<12) catMonths[cat][mi]++; }
@@ -1243,7 +1245,7 @@ function pageAnaJob(c) {
       const fCount = (flaws.match(/[、，；,;]/g) || []).length + 1;
       const score = Math.round(eCount * 10 + fCount * 8);
       const ind = indMap.get(j['行业编号']);
-      const catName = ind ? ind['行业门类'] : j['行业编号'];
+      const catName = ind ? ind['行业大类'] : j['行业编号'];
       return { jn: j['常见职位'], code: j['行业编号'], cat: catName, score, eCount, fCount, evidence, flaws };
     }).sort((a,b) => b.score - a.score);
     const seen = new Set(), unique = [];
@@ -1262,7 +1264,7 @@ function pageAnaJob(c) {
       const name = k.split('|')[1] || k;
       const code = k.split('|')[0] || '';
       const ind = DB.industries ? DB.industries.find(i => i['行业编号'] === code) : null;
-      const cat = ind ? ind['行业门类'] : code;
+      const cat = ind ? ind['行业大类'] : code;
       allJobs.push({
         name, code, cat,
         min: s.monthly_min || s.monthly_median * 0.75,
@@ -1405,9 +1407,25 @@ function pageAnaCity(c) {
     const cf = DB.city_factors || {};
     const allSal = Object.values(DB.salary).filter(s => s && s.monthly_median);
     const avgBase = allSal.length ? Math.round(allSal.reduce((a,s) => a + s.monthly_median, 0) / allSal.length) : 7000;
-    const entries = Object.entries(cf).map(([city, f]) => ({ city, factor: f, nominal: Math.round(avgBase * f) })).sort((a,b) => b.factor - a.factor);
-    const mx = Math.max(1, ...entries.map(x => x.nominal));
-    $('#cityPP').innerHTML = entries.map(x => `<div class="bar-row ${x.factor >= 1.4 ? 'red' : x.factor >= 1.1 ? 'gold' : 'green'}"><div class="bl">${esc(x.city)}</div><div class="bt"><div class="bf" style="width:${(x.nominal/mx*100).toFixed(1)}%;background:linear-gradient(90deg,#3b82f6,#2563eb)"></div></div><div class="bv">${(x.nominal/1000).toFixed(1)}k <small style="color:#94a3b8;font-weight:400">系数${x.factor}</small></div></div>`).join('');
+    const entries = Object.entries(cf).map(([city, f]) => {
+      const salF = f.salary_factor || f;
+      const costF = f.cost_factor || 1;
+      const nominal = Math.round(avgBase * salF);
+      const purchasing = Math.round(nominal / costF);
+      const ppRatio = (salF / costF).toFixed(2);
+      return { city, salF, costF, nominal, purchasing, ppRatio };
+    }).sort((a,b) => b.purchasing - a.purchasing);
+    const mx = Math.max(1, ...entries.map(x => Math.max(x.nominal, x.purchasing)));
+    $('#cityPP').innerHTML = entries.map(x => `
+      <div class="bar-row ${x.ppRatio >= 1.2 ? 'green' : x.ppRatio >= 1.0 ? '' : 'gold'}">
+        <div class="bl">${esc(x.city)}</div>
+        <div class="bt">
+          <div class="bf" style="width:${(x.nominal/mx*100).toFixed(1)}%;background:linear-gradient(90deg,#3b82f6,#2563eb);opacity:0.7" title="名义薪资"></div>
+          <div class="bf" style="position:relative;width:${(x.purchasing/mx*100).toFixed(1)}%;background:linear-gradient(90deg,#10b981,#059669);margin-top:-100%;height:100%" title="购买力等值"></div>
+        </div>
+        <div class="bv">${(x.purchasing/1000).toFixed(1)}k <small style="color:#94a3b8">购买力×${x.ppRatio}</small></div>
+      </div>
+    `).join('') + `<div class="legend" style="margin-top:8px;font-size:12px;color:#64748b"><span><i style="background:#3b82f6;display:inline-block;width:12px;height:10px;border-radius:2px;vertical-align:middle"></i> 名义薪资</span> <span style="margin-left:12px"><i style="background:#10b981;display:inline-block;width:12px;height:10px;border-radius:2px;vertical-align:middle"></i> 购买力等值</span></div>`;
   })();
 }
 
@@ -1683,7 +1701,7 @@ function pageIndustries(c) {
     sub: `共 ${DB.meta.industry_count} 个细分行业`,
     columns: [
       { t: '编号', k: '行业编号', cls: 'code', wrap: false },
-      { t: '门类', k: '行业门类', wrap: false },
+      { t: '门类', k: '行业大类', wrap: false },
       { t: '细分行业', k: '细分行业', wrap: false },
       { t: '典型经营主体形态', k: '典型经营主体形态' },
       { t: '必备证照资质', k: '必备证照资质' },
@@ -1769,7 +1787,7 @@ function pageSearch(c) {
 
     const match = (obj, fields) => fields.some(f => String(obj[f] || '').toLowerCase().includes(q));
     const groups = [
-      ['industries', '🏢 行业档案', inds, ['行业编号', '行业门类', '细分行业', '典型经营主体形态', '必备证照资质', '常见经营规模', '订单与客户来源', '典型融资用途', '前景趋势判断', '毛利率区间', '净利率区间', '旺季月份', '淡季月份', '季节性资金缺口高峰', '主要经营风险', '政策与外部驱动', '职业标签串']],
+      ['industries', '🏢 行业档案', inds, ['行业编号', '行业大类', '细分行业', '典型经营主体形态', '必备证照资质', '常见经营规模', '订单与客户来源', '典型融资用途', '前景趋势判断', '毛利率区间', '净利率区间', '旺季月份', '淡季月份', '季节性资金缺口高峰', '主要经营风险', '政策与外部驱动', '职业标签串']],
       ['jobs', '👥 职业核实', jobs, ['行业编号', '常见职位', '这个岗位每天干什么', '审核时怎么问', '能查到哪些证据', '真干过的人怎么答', '没干过的破绽', '审批要点']],
       ['modes', '🧩 经营模式', modes, ['行业编号', '细分模式', '运作方式', '盈利逻辑', '上下游与结算回款方式', '成本结构', '资金需求特点与周期', '授信关注要点']],
       ['city_risks', '🏙 城市风险', risks, ['行业编号', '城市', '风险层级', '依据与尽调要点']],
@@ -1784,7 +1802,7 @@ function pageSearch(c) {
         ${results.map(x => {
           const key = keyOf(k, x);
           const titleField = k === 'industries' ? x['细分行业'] : k === 'jobs' ? x['常见职位'] : k === 'modes' ? x['细分模式'] : x['城市'];
-          const subField = k === 'industries' ? x['行业门类'] : k === 'jobs' ? x['行业编号'] : k === 'modes' ? x['行业编号'] : x['行业编号'];
+          const subField = k === 'industries' ? x['行业大类'] : k === 'jobs' ? x['行业编号'] : k === 'modes' ? x['行业编号'] : x['行业编号'];
           const hitFields = fields.filter(f => String(x[f] || '').toLowerCase().includes(q));
           return `<div class="sr-item" data-k="${esc(key)}" data-type="${k}">
             <div class="t">${hlText(titleField, q)}</div>
@@ -1917,7 +1935,7 @@ function pageFavorites(c) {
   if (favInds.length) {
     html += '<div class="fav-list">';
     for (const ind of favInds) {
-      html += '<div class="fav-item"><div class="fi-main"><span class="code">' + esc(ind['行业编号']) + '</span> ' + esc(ind['细分行业']) + ' <span class="dim">(' + esc(ind['行业大类'] || ind['行业门类'] || '') + ')</span></div>' +
+      html += '<div class="fav-item"><div class="fi-main"><span class="code">' + esc(ind['行业编号']) + '</span> ' + esc(ind['细分行业']) + ' <span class="dim">(' + esc(ind['行业大类'] || ind['行业大类'] || '') + ')</span></div>' +
         '<div class="fi-act"><button class="btn xs" onclick="goIndustryDetail(\'' + ind['行业编号'] + '\')">查看</button>' +
         '<button class="btn xs red" onclick="removeFav(\'industries\',\'' + ind['行业编号'] + '\')">移除</button></div></div>';
     }
@@ -2032,7 +2050,9 @@ function pageCompare(c) {
     }],
     ['薪资趋势', j => {
       const sal = DB.salary[j['行业编号'] + '|' + j['常见职位']];
-      return sal ? sal.trend || '—' : '—';
+      return sal && sal.trend && typeof sal.trend === 'object'
+      ? Object.keys(sal.trend).sort().slice(-1)[0] + '年: ' + (sal.trend[Object.keys(sal.trend).sort().slice(-1)[0]].growth_rate || '—')
+      : sal && sal.trend ? sal.trend : '—';
     }],
     ['需求程度', j => {
       const sal = DB.salary[j['行业编号'] + '|' + j['常见职位']];
@@ -2109,7 +2129,7 @@ function doExport() {
       csv += '【行业信息】\n';
       csv += '行业编号,行业大类,细分行业,前景趋势,毛利率区间,净利率区间\n';
       for (const i of inds) {
-        csv += [i['行业编号'], i['行业大类'] || i['行业门类'] || '', i['细分行业'], i['前景趋势判断'] || '', i['毛利率区间'] || '', i['净利率区间'] || '']
+        csv += [i['行业编号'], i['行业大类'] || i['行业大类'] || '', i['细分行业'], i['前景趋势判断'] || '', i['毛利率区间'] || '', i['净利率区间'] || '']
           .map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',') + '\n';
       }
       csv += '\n';
