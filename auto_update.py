@@ -366,35 +366,98 @@ def update_salary_data(data):
     
     # 职位薪资倍数（相对于行业基准）
     job_multipliers = {
-        # 管理岗
-        "总经理": 2.5, "总监": 2.0, "经理": 1.8, "主管": 1.4, "主任": 1.3, "组长": 1.2,
-        "项目经理": 1.6, "运营总监": 2.0, "运营经理": 1.4,
-        # 技术岗
-        "工程师": 1.2, "高级工程师": 1.6, "技术员": 0.9, "设计师": 1.3, "美工": 1.1,
-        "前端开发": 1.4, "后端开发": 1.5, "运维": 1.0, "产品经理": 1.7,
+        # 高管/决策层
+        "CEO": 3.5, "CFO": 3.0, "COO": 3.0, "CTO": 3.2, "HRD": 2.8,
+        "总经理": 2.5, "项目总经理": 2.8, "副校长": 2.0, "校长": 2.5, "院长": 3.0,
+        "总监": 2.0, "运营总监": 2.0, "销售总监": 2.2, "市场总监": 2.0,
+        "创意总监": 2.2, "采购总监": 2.0, "项目总监": 2.0,
+        # 中层管理
+        "经理": 1.8, "项目经理": 1.6, "运营经理": 1.4, "销售经理": 1.6,
+        "市场经理": 1.5, "品牌经理": 1.5, "产品经理": 1.7, "招商经理": 1.6,
+        "商务经理": 1.5, "物流经理": 1.4, "渠道经理": 1.4, "案场经理": 1.5,
+        "财务经理": 1.6, "法务经理": 1.6, "采购经理": 1.5, "人力资源经理": 1.5,
+        "售后经理": 1.4, "成本经理": 1.6, "酒店经理": 1.5,
+        "主管": 1.4, "运营主管": 1.3, "操作主管": 1.2, "客房主管": 1.1,
+        "主任": 1.3, "车间主任": 1.35, "组长": 1.2, "店长": 0.85,
+        # 研发/技术岗
+        "高级工程师": 1.6, "工程师": 1.2, "架构师": 2.2, "专家": 1.8,
+        "技术员": 0.9, "技师": 0.95, "研发": 1.3,
+        # IT开发
+        "前端开发": 1.4, "后端开发": 1.5, "全栈": 1.6, "前端": 1.4, "后端": 1.5,
+        "Java": 1.5, "Python": 1.5, "Go": 1.6, "C++": 1.5, "Android": 1.4,
+        "iOS": 1.5, "Node": 1.4, "PHP": 1.2, ".NET": 1.2, "Unity": 1.4, "UE5": 1.6,
+        "DBA": 1.5, "SRE": 1.6, "DevOps": 1.6, "运维": 1.0,
+        "算法": 1.8, "AI": 1.8, "数据": 1.4, "BI": 1.3, "测试": 1.0,
+        "安全": 1.1, "网络": 1.1, "系统": 1.1,
+        # 芯片/半导体
+        "芯片": 1.8, "IC": 1.8, "版图": 1.5, "半导体": 1.6, "EDA": 1.7,
+        # 建筑工程
         "造价员": 1.25, "安全员": 0.85, "施工员": 1.15, "资料员": 0.75,
         "质检员": 0.85, "检测员": 0.85, "电工": 0.8,
-        "数控操作工": 0.9, "车间主任": 1.35, "爆破工": 1.3,
-        "钻机操作员": 1.15, "园林工程师": 1.1,
-        # 销售岗
-        "销售": 1.0, "业务员": 0.9, "客户经理": 1.2,
-        # 服务岗
-        "服务员": 0.55, "收银员": 0.5, "导购": 0.7, "保洁员": 0.45,
-        "厨师": 0.7, "司机": 0.75, "快递员": 0.72, "配送": 0.7,
-        "仓管": 0.58, "店员": 0.6, "客服": 0.8,
-        # 管理/店主
-        "店长": 0.85, "店主": 0.7, "老板": 1.0,
-        # 医护
-        "护士": 0.8, "医生": 1.5,
+        "土建": 1.2, "造价": 1.25, "监理": 1.1,
+        # 生产/制造
+        "数控": 0.9, "CNC": 0.9, "PLC": 1.0, "车间": 1.0,
+        "工艺": 1.2, "设备": 1.1, "维修": 1.0, "焊接": 0.95,
+        "操作工": 0.75, "技工": 0.9, "工匠": 0.95,
+        "QC": 0.85, "QA": 0.9, "质检": 0.85,
+        # 销售/市场
+        "销售": 1.0, "业务员": 0.9, "客户经理": 1.2, "大客户": 1.3,
+        "置业顾问": 1.0, "售前": 1.2, "电话销售": 0.8, "区域销售": 1.0,
+        "海外销售": 1.3, "经纪人": 1.0, "推广": 0.9,
+        "市场": 1.1, "品牌": 1.2, "策划": 1.0, "活动": 0.95,
+        "新媒体": 1.0, "媒介": 1.0, "广告": 1.0, "公关": 1.1,
+        "SEO": 1.0, "SEM": 1.0, "信息流": 1.0,
+        # 运营/电商
+        "运营": 1.0, "电商": 1.0, "亚马逊": 1.1, "速卖通": 1.0,
+        "选品": 0.95, "直播": 1.1, "类目": 1.0, "商品": 0.9,
+        # 财务/法务
+        "财务": 1.3, "会计": 1.0, "出纳": 0.75, "审计": 1.3,
+        "税务": 1.2, "成本": 1.1, "资金": 1.2, "风控": 1.3,
+        "法务": 1.5, "合规": 1.3, "律师": 1.6, "专利": 1.4,
+        "知识产权": 1.4,
+        # 人力/行政
+        "招聘": 1.0, "薪酬": 1.1, "绩效": 1.0, "培训": 1.0,
+        "员工关系": 1.0, "HR": 1.0, "BP": 1.2, "RPO": 0.95,
+        "猎头": 1.3, "行政": 0.85, "文员": 0.7, "前台": 0.6,
+        "后勤": 0.75, "档案": 0.7, "司机": 0.75, "保安": 0.6,
+        "保洁": 0.45,
+        # 客服/服务
+        "客服": 0.8, "坐席": 0.7, "客户成功": 1.0, "导医": 0.7,
+        "接待": 0.7, "预订": 0.7, "乘务": 0.8, "空乘": 0.8,
+        "地勤": 0.75, "值机": 0.7, "安检": 0.8,
+        "服务员": 0.55, "收银员": 0.5, "导购": 0.7,
+        "店员": 0.6, "仓管": 0.58,
+        # 医疗
+        "护士": 0.8, "医生": 1.5, "医师": 1.5, "药师": 1.2,
+        "检验": 0.9, "影像": 0.95, "康复": 0.9, "治疗师": 0.9,
+        "医务": 1.0, "病案": 0.8, "临床": 1.3,
+        # 物流
+        "快递": 0.72, "配送": 0.7, "调度": 0.9, "运输": 0.85,
+        "运力": 0.85, "货运": 0.85, "供应链": 1.1, "分拣": 0.65,
+        "物流": 0.9, "仓库": 0.8,
+        # 教育
+        "教师": 1.0, "老师": 1.0, "讲师": 1.2, "教务": 0.9,
+        "学管": 0.9, "教研": 1.0, "班主任": 0.95, "辅导员": 0.9,
+        "课程顾问": 1.0,
+        # 采购
+        "采购": 1.0, "供应商": 0.9, "招投标": 0.9, "寻源": 1.0,
+        "S&OP": 1.2,
+        # 设计/创意
+        "设计": 1.3, "美工": 1.1, "美术": 1.2, "创意": 1.3,
+        "UI": 1.3, "UX": 1.3, "视觉": 1.2, "ID设计": 1.3,
         # 其他
-        "主播": 1.2, "运营": 1.0, "推广": 0.9, "策划": 1.0,
-        "配送司机": 0.8,
+        "主播": 1.2, "厨师": 0.7, "老板": 1.0, "店主": 0.7,
+        "PMO": 1.1, "ESG": 1.2, "FAE": 1.3,
     }
-    
+
     # 高需求职位关键词
     high_demand_keywords = [
         "安全员", "施工员", "电工", "司机", "快递", "配送", "厨师",
-        "保洁", "导购", "护士", "服务员", "收银员", "仓管", "客服"
+        "保洁", "导购", "护士", "服务员", "收银员", "仓管", "客服",
+        "销售", "业务员", "操作工", "技工", "质检", "QC",
+        "客服", "坐席", "前台", "保安", "分拣", "调度",
+        "厨师", "乘务", "空乘", "地勤", "值机", "安检",
+        "导游", "讲解员", "迎宾", "泊车", "洗车",
     ]
     
     # 生成薪资数据
@@ -531,7 +594,7 @@ def update_industry_financials(data):
 # 生成JS文件
 # ============================================================
 def generate_js_files(data):
-    """从seed数据生成data1-6.js文件"""
+    """从seed数据生成data1-8.js文件（8文件拆分，适配7438+职位）"""
     print("=== 生成JS数据文件 ===")
     
     out_dir = os.path.join(ROOT, "public", "static")
@@ -546,41 +609,49 @@ def generate_js_files(data):
     city_factors = data.get('city_factors', {})
     meta = data.get('meta', {})
     
-    # data1.js
+    # data1.js: meta + industries + modes + cities
     d1 = {"meta": meta, "industries": industries, "modes": modes, "cities": cities}
     with open(os.path.join(out_dir, "data1.js"), 'w', encoding='utf-8') as f:
         f.write("window.XWK_DATA_1 = " + json.dumps(d1, ensure_ascii=False) + ";\n")
 
-    # data2.js + data3.js: jobs 拆分两半（避免超1MB）
-    mid_j = len(jobs) // 2
-    d2 = {"jobs": jobs[:mid_j]}
-    with open(os.path.join(out_dir, "data2.js"), 'w', encoding='utf-8') as f:
-        f.write("window.XWK_DATA_2 = " + json.dumps(d2, ensure_ascii=False) + ";\n")
+    # data2-5.js: jobs 拆分4份（每份约1.8MB，适配7438条职位）
+    n_job_files = 4
+    chunk_j = (len(jobs) + n_job_files - 1) // n_job_files
+    for i in range(n_job_files):
+        start = i * chunk_j
+        end = min(start + chunk_j, len(jobs))
+        d = {"jobs": jobs[start:end]}
+        fname = f"data{i+2}.js"
+        with open(os.path.join(out_dir, fname), 'w', encoding='utf-8') as f:
+            f.write(f"window.XWK_DATA_{i+2} = " + json.dumps(d, ensure_ascii=False) + ";\n")
 
-    d3 = {"jobs": jobs[mid_j:]}
-    with open(os.path.join(out_dir, "data3.js"), 'w', encoding='utf-8') as f:
-        f.write("window.XWK_DATA_3 = " + json.dumps(d3, ensure_ascii=False) + ";\n")
-
-    # data4.js + data5.js: city_risks 拆分两半
+    # data6.js + data7.js: city_risks 拆分2份
     mid_r = len(city_risks) // 2
-    d4 = {"city_risks": city_risks[:mid_r]}
-    with open(os.path.join(out_dir, "data4.js"), 'w', encoding='utf-8') as f:
-        f.write("window.XWK_DATA_4 = " + json.dumps(d4, ensure_ascii=False) + ";\n")
-
-    d5 = {"city_risks": city_risks[mid_r:]}
-    with open(os.path.join(out_dir, "data5.js"), 'w', encoding='utf-8') as f:
-        f.write("window.XWK_DATA_5 = " + json.dumps(d5, ensure_ascii=False) + ";\n")
-
-    # data6.js: salary + city_factors
-    d6 = {"salary": salary, "city_factors": city_factors}
+    d6 = {"city_risks": city_risks[:mid_r]}
     with open(os.path.join(out_dir, "data6.js"), 'w', encoding='utf-8') as f:
         f.write("window.XWK_DATA_6 = " + json.dumps(d6, ensure_ascii=False) + ";\n")
+
+    d7 = {"city_risks": city_risks[mid_r:]}
+    with open(os.path.join(out_dir, "data7.js"), 'w', encoding='utf-8') as f:
+        f.write("window.XWK_DATA_7 = " + json.dumps(d7, ensure_ascii=False) + ";\n")
+
+    # data8.js: salary + city_factors
+    # data8.js + data9.js: salary 拆分2份 + city_factors
+    salary_items = list(salary.items())
+    mid_s = len(salary_items) // 2
+    d8 = {"salary": dict(salary_items[:mid_s]), "city_factors": city_factors}
+    with open(os.path.join(out_dir, "data8.js"), 'w', encoding='utf-8') as f:
+        f.write("window.XWK_DATA_8 = " + json.dumps(d8, ensure_ascii=False) + ";\n")
+
+    d9 = {"salary": dict(salary_items[mid_s:])}
+    with open(os.path.join(out_dir, "data9.js"), 'w', encoding='utf-8') as f:
+        f.write("window.XWK_DATA_9 = " + json.dumps(d9, ensure_ascii=False) + ";\n")
     
     total = 0
-    for name in ["data1.js", "data2.js", "data3.js", "data4.js", "data5.js", "data6.js"]:
+    for name in ["data1.js", "data2.js", "data3.js", "data4.js", "data5.js", "data6.js", "data7.js", "data8.js", "data9.js"]:
         size = os.path.getsize(os.path.join(out_dir, name))
         total += size
-        flag = " *** OVER 1MB ***" if size > 1048576 else ""
+        flag = " *** OVER 2MB ***" if size > 2097152 else (" * over 1MB *" if size > 1048576 else "")
         print(f"  {name}: {size//1024}KB{flag}")
     
     print(f"  总计: {total//1024}KB")
@@ -593,10 +664,10 @@ if __name__ == '__main__':
     print("开始数据更新 - " + datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     print("=" * 60)
     
-    # 加载现有数据
-    seed_path = os.path.join(ROOT, "data", "seed.json")
+    # 加载现有数据（优先seed_updated.json，因为它包含人工补充的数据）
+    seed_path = os.path.join(ROOT, "data", "seed_updated.json")
     if not os.path.exists(seed_path):
-        seed_path = os.path.join(ROOT, "data", "seed_updated.json")
+        seed_path = os.path.join(ROOT, "data", "seed.json")
     
     print(f"\n数据源: {seed_path}")
     with open(seed_path, 'r', encoding='utf-8') as f:

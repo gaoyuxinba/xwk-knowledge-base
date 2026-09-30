@@ -6,11 +6,10 @@
 
 // ------------------------------------------------------------------ 数据合并
 // 数据兼容：如果salary没有trend字段，从years字段生成
-if (window.XWK_DATA_6 && window.XWK_DATA_6.salary) {
-  for (const key in window.XWK_DATA_6.salary) {
-    const sd = window.XWK_DATA_6.salary[key];
+if (window.XWK_DATA_8 && window.XWK_DATA_8.salary) {
+  for (const key in window.XWK_DATA_8.salary) {
+    const sd = window.XWK_DATA_8.salary[key];
     if (!sd) continue;
-    // 如果有years但没有trend，生成trend
     if (sd.years && !sd.trend) {
       sd.trend = {};
       for (const yr in sd.years) {
@@ -24,7 +23,26 @@ if (window.XWK_DATA_6 && window.XWK_DATA_6.salary) {
         };
       }
     }
-    // 如果没有annual_median，用annual
+    if (sd.annual && !sd.annual_median) sd.annual_median = sd.annual;
+  }
+}
+if (window.XWK_DATA_9 && window.XWK_DATA_9.salary) {
+  for (const key in window.XWK_DATA_9.salary) {
+    const sd = window.XWK_DATA_9.salary[key];
+    if (!sd) continue;
+    if (sd.years && !sd.trend) {
+      sd.trend = {};
+      for (const yr in sd.years) {
+        const d = sd.years[yr];
+        sd.trend[yr] = {
+          min: d.monthly_min || 0,
+          max: d.monthly_max || 0,
+          median: d.monthly_median || 0,
+          annual: d.annual || 0,
+          growth_rate: d.growth_rate || '',
+        };
+      }
+    }
     if (sd.annual && !sd.annual_median) sd.annual_median = sd.annual;
   }
 }
@@ -37,13 +55,18 @@ const DB = {
   jobs: [
     ...(window.XWK_DATA_2 ? window.XWK_DATA_2.jobs : []),
     ...(window.XWK_DATA_3 ? window.XWK_DATA_3.jobs : []),
+    ...(window.XWK_DATA_4 ? window.XWK_DATA_4.jobs : []),
+    ...(window.XWK_DATA_5 ? window.XWK_DATA_5.jobs : []),
   ],
   city_risks: [
-    ...(window.XWK_DATA_4 ? window.XWK_DATA_4.city_risks : []),
-    ...(window.XWK_DATA_5 ? window.XWK_DATA_5.city_risks : []),
+    ...(window.XWK_DATA_6 ? window.XWK_DATA_6.city_risks : []),
+    ...(window.XWK_DATA_7 ? window.XWK_DATA_7.city_risks : []),
   ],
-  salary: window.XWK_DATA_6 ? window.XWK_DATA_6.salary : {},
-  city_factors: window.XWK_DATA_6 ? window.XWK_DATA_6.city_factors : {},
+  salary: {
+    ...(window.XWK_DATA_8 ? window.XWK_DATA_8.salary : {}),
+    ...(window.XWK_DATA_9 ? window.XWK_DATA_9.salary : {}),
+  },
+  city_factors: window.XWK_DATA_8 ? window.XWK_DATA_8.city_factors : {},
 };
 
 // localStorage 编辑覆盖层
