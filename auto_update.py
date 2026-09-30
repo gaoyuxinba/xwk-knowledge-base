@@ -550,29 +550,29 @@ def generate_js_files(data):
     d1 = {"meta": meta, "industries": industries, "modes": modes, "cities": cities}
     with open(os.path.join(out_dir, "data1.js"), 'w', encoding='utf-8') as f:
         f.write("window.XWK_DATA_1 = " + json.dumps(d1, ensure_ascii=False) + ";\n")
-    
-    # data2.js
-    d2 = {"jobs": jobs}
+
+    # data2.js + data3.js: jobs 拆分两半（避免超1MB）
+    mid_j = len(jobs) // 2
+    d2 = {"jobs": jobs[:mid_j]}
     with open(os.path.join(out_dir, "data2.js"), 'w', encoding='utf-8') as f:
         f.write("window.XWK_DATA_2 = " + json.dumps(d2, ensure_ascii=False) + ";\n")
-    
-    # data3.js + data4.js: city_risks split
-    mid = len(city_risks) // 2
-    d3 = {"city_risks": city_risks[:mid]}
+
+    d3 = {"jobs": jobs[mid_j:]}
     with open(os.path.join(out_dir, "data3.js"), 'w', encoding='utf-8') as f:
         f.write("window.XWK_DATA_3 = " + json.dumps(d3, ensure_ascii=False) + ";\n")
-    
-    d4 = {"city_risks": city_risks[mid:]}
+
+    # data4.js + data5.js: city_risks 拆分两半
+    mid_r = len(city_risks) // 2
+    d4 = {"city_risks": city_risks[:mid_r]}
     with open(os.path.join(out_dir, "data4.js"), 'w', encoding='utf-8') as f:
         f.write("window.XWK_DATA_4 = " + json.dumps(d4, ensure_ascii=False) + ";\n")
-    
-    # data5.js
-    d5 = {"salary": salary}
+
+    d5 = {"city_risks": city_risks[mid_r:]}
     with open(os.path.join(out_dir, "data5.js"), 'w', encoding='utf-8') as f:
         f.write("window.XWK_DATA_5 = " + json.dumps(d5, ensure_ascii=False) + ";\n")
-    
-    # data6.js
-    d6 = {"city_factors": city_factors}
+
+    # data6.js: salary + city_factors
+    d6 = {"salary": salary, "city_factors": city_factors}
     with open(os.path.join(out_dir, "data6.js"), 'w', encoding='utf-8') as f:
         f.write("window.XWK_DATA_6 = " + json.dumps(d6, ensure_ascii=False) + ";\n")
     
