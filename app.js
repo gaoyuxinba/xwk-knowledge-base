@@ -936,7 +936,7 @@ function sec06(indCode, jobNames, selectedCities) {
     });
     
     // 面积路径
-    const linePath = points.map((p, i) => (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1))).join(' ');
+    const linePath = points.map((p, i) => (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
     const areaPath = linePath + ` L${points[points.length-1].x.toFixed(1)},${(padT+innerH).toFixed(1)} L${points[0].x.toFixed(1)},${(padT+innerH).toFixed(1)} Z`;
     
     // 网格线
