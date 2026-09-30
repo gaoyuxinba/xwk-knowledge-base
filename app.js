@@ -920,17 +920,65 @@ function sec06(indCode, jobNames, selectedCities) {
       </div>`;
     }).join('');
 
-    // 年度趋势柱状图（使用基准薪资）
-    const bars = years.map(y => {
-      const d = trend[y];
-      const h = (d.median / maxVal * 100).toFixed(1);
-      const isLatest = y === years[years.length - 1];
-      return `<div class="salary-bar">
-        <div class="bar-val">${(d.median / 1000).toFixed(1)}k</div>
-        <div class="bar-fill" style="height:${h}%;${isLatest ? 'background:linear-gradient(180deg,#60a5fa,#2563eb)' : ''}"></div>
-        <div class="bar-lbl">${y}</div>
-      </div>`;
-    }).join('');
+    // 年度趋势SVG面积渐变图
+    const chartW = 500, chartH = 180, padL = 40, padR = 20, padT = 20, padB = 30;
+    const innerW = chartW - padL - padR;
+    const innerH = chartH - padT - padB;
+    const vals = years.map(y => trend[y].median);
+    const vMax = Math.max(...vals) * 1.15;
+    const vMin = Math.min(...vals) * 0.85;
+    const vRange = vMax - vMin || 1;
+    
+    const points = years.map((y, i) => {
+      const x = padL + (innerW / (years.length - 1 || 1)) * i;
+      const yv = padT + innerH - ((trend[y].median - vMin) / vRange * innerH);
+      return { x, y: yv, year: y, val: trend[y].median };
+    });
+    
+    // 面积路径
+    const linePath = points.map((p, i) => (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1))).join(' ');
+    const areaPath = linePath + ` L${points[points.length-1].x.toFixed(1)},${(padT+innerH).toFixed(1)} L${points[0].x.toFixed(1)},${(padT+innerH).toFixed(1)} Z`;
+    
+    // 网格线
+    const gridLines = [];
+    for (let g = 0; g <= 4; g++) {
+      const gy = padT + innerH / 4 * g;
+      const gv = Math.round(vMax - (vRange / 4 * g));
+      gridLines.push(`<line x1="${padL}" y1="${gy.toFixed(1)}" x2="${chartW-padR}" y2="${gy.toFixed(1)}" stroke="#e5e7eb" stroke-dasharray="3,3" stroke-width="0.5"/>`);
+      gridLines.push(`<text x="${padL-6}" y="${gy.toFixed(1)}" text-anchor="end" dominant-baseline="middle" fill="#9ca3af" font-size="10">${(gv/1000).toFixed(0)}k</text>`);
+    }
+    
+    // 数据点和标注
+    const dataDots = points.map(p => `
+      <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="#fff" stroke="#3b82f6" stroke-width="2">
+        <animate attributeName="r" from="0" to="4" dur="0.5s" fill="freeze" begin="${points.indexOf(p)*0.1}s"/>
+      </circle>
+      <text x="${p.x.toFixed(1)}" y="${(p.y-10).toFixed(1)}" text-anchor="middle" fill="#1e40af" font-size="11" font-weight="600">${(p.val/1000).toFixed(1)}k</text>
+      <text x="${p.x.toFixed(1)}" y="${(padT+innerH+18).toFixed(1)}" text-anchor="middle" fill="#6b7280" font-size="11">${p.year}</text>
+    `).join('');
+    
+    // 渐变定义
+    const trendSvg = `
+    <svg viewBox="0 0 ${chartW} ${chartH}" class="trend-svg" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.35"/>
+          <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.02"/>
+        </linearGradient>
+        <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="#60a5fa"/>
+          <stop offset="100%" stop-color="#2563eb"/>
+        </linearGradient>
+      </defs>
+      ${gridLines.join('')}
+      <path d="${areaPath}" fill="url(#areaGrad)" class="trend-area">
+        <animate attributeName="opacity" from="0" to="1" dur="0.8s" fill="freeze"/>
+      </path>
+      <path d="${linePath}" fill="none" stroke="url(#lineGrad)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="trend-line">
+        <animate attributeName="stroke-dasharray" from="0,1000" to="1000,0" dur="1.2s" fill="freeze"/>
+      </path>
+      ${dataDots}
+    </svg>`;
 
     const firstYear = trend[years[0]];
     const lastYear = trend[years[years.length - 1]];
@@ -967,8 +1015,8 @@ function sec06(indCode, jobNames, selectedCities) {
       </div>` : ''}
 
       <div class="salary-chart">
-        <div class="chart-title">📊 年度薪资趋势（基准月薪中位数）</div>
-        <div class="salary-bars">${bars}</div>
+        <div class="chart-title">📈 年度薪资趋势（基准月薪中位数）</div>
+        <div class="trend-chart-wrap">${trendSvg}</div>
       </div>
       <div class="salary-demand">
         <span class="dl">市场需求：</span>
@@ -2090,6 +2138,296 @@ function clearCmp() {
   renderNav();
 }
 
+
+// ================================================================== PDF专业报告导出
+function generatePdfReport(industries, jobs, cities, allJobs, allRisks) {
+  const today = new Date().toLocaleDateString('zh-CN');
+  const indCount = industries.length;
+  const jobCount = jobs.length;
+  const cityCount = cities.length;
+  
+  // 计算统计数据
+  const riskStats = { A: 0, B: 0, C: 0, D: 0 };
+  const filteredRisks = allRisks.filter(r => industries.some(i => i['行业编号'] === r['行业编号']) && (!cities.length || cities.includes(r['城市'])));
+  filteredRisks.forEach(r => { if (riskStats[r['风险层级']] !== undefined) riskStats[r['风险层级']]++; });
+  
+  const avgSalary = jobCount > 0 ? Math.round(jobs.reduce((a,j) => {
+    const sk = j['行业编号'] + '|' + j['常见职位'];
+    const sd = DB.salary[sk];
+    return a + (sd ? sd.monthly_median : 0);
+  }, 0) / jobCount) : 0;
+  
+  // 行业大类分布
+  const catMap = {};
+  industries.forEach(i => {
+    const cat = i['行业大类'] || '其他';
+    catMap[cat] = (catMap[cat] || 0) + 1;
+  });
+  const topCats = Object.entries(catMap).sort((a,b) => b[1]-a[1]).slice(0, 8);
+  
+  // 薪资分布
+  const salBins = { '3K以下': 0, '3-5K': 0, '5-8K': 0, '8-12K': 0, '12-20K': 0, '20-30K': 0, '30K以上': 0 };
+  jobs.forEach(j => {
+    const sk = j['行业编号'] + '|' + j['常见职位'];
+    const sd = DB.salary[sk];
+    if (!sd) return;
+    const m = sd.monthly_median;
+    if (m < 3000) salBins['3K以下']++;
+    else if (m < 5000) salBins['3-5K']++;
+    else if (m < 8000) salBins['5-8K']++;
+    else if (m < 12000) salBins['8-12K']++;
+    else if (m < 20000) salBins['12-20K']++;
+    else if (m < 30000) salBins['20-30K']++;
+    else salBins['30K以上']++;
+  });
+  
+  // 生成行业列表HTML
+  const indListHtml = industries.slice(0, 30).map((i, idx) => `
+    <tr>
+      <td style="padding:8px 12px;border:1px solid #e5e7eb;font-size:12px">${i['行业编号']}</td>
+      <td style="padding:8px 12px;border:1px solid #e5e7eb;font-size:12px">${i['行业大类'] || ''}</td>
+      <td style="padding:8px 12px;border:1px solid #e5e7eb;font-size:12px;font-weight:500">${i['细分行业']}</td>
+      <td style="padding:8px 12px;border:1px solid #e5e7eb;font-size:12px">${i['毛利率区间'] || '-'}</td>
+      <td style="padding:8px 12px;border:1px solid #e5e7eb;font-size:12px">${i['前景趋势判断'] ? i['前景趋势判断'].substring(0, 30) + '...' : '-'}</td>
+    </tr>
+  `).join('');
+  
+  // 生成核心职位列表
+  const jobListHtml = jobs.slice(0, 20).map((j, idx) => {
+    const sk = j['行业编号'] + '|' + j['常见职位'];
+    const sd = DB.salary[sk];
+    const ind = industries.find(i => i['行业编号'] === j['行业编号']);
+    return `
+    <tr>
+      <td style="padding:8px 12px;border:1px solid #e5e7eb;font-size:12px">${j['职位编号'] || j['行业编号']}</td>
+      <td style="padding:8px 12px;border:1px solid #e5e7eb;font-size:12px;font-weight:500">${j['常见职位']}</td>
+      <td style="padding:8px 12px;border:1px solid #e5e7eb;font-size:12px">${ind ? ind['细分行业'] : j['行业编号']}</td>
+      <td style="padding:8px 12px;border:1px solid #e5e7eb;font-size:12px;text-align:right">${sd ? (sd.monthly_median/1000).toFixed(1) + 'k' : '-'}</td>
+    </tr>`;
+  }).join('');
+  
+  // 风险等级颜色
+  const lvColors = { A: '#059669', B: '#3b82f6', C: '#d97706', D: '#dc2626' };
+  
+  // 生成完整HTML
+  const reportHtml = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>小微行业知识库分析报告</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; color: #1f2937; background: #fff; font-size: 14px; line-height: 1.6; }
+  .report-wrap { max-width: 800px; margin: 0 auto; padding: 40px; }
+  
+  /* 封面 */
+  .cover { text-align: center; padding: 80px 40px; background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #60a5fa 100%); color: white; border-radius: 12px; margin-bottom: 40px; }
+  .cover-logo { font-size: 48px; margin-bottom: 20px; }
+  .cover-title { font-size: 32px; font-weight: 700; margin-bottom: 12px; }
+  .cover-sub { font-size: 16px; opacity: 0.9; margin-bottom: 30px; }
+  .cover-meta { display: flex; justify-content: center; gap: 40px; font-size: 14px; opacity: 0.85; }
+  .cover-meta div span { display: block; font-size: 24px; font-weight: 700; margin-top: 4px; }
+  
+  /* 章节 */
+  .section { margin-bottom: 36px; }
+  .sec-title { font-size: 20px; font-weight: 700; color: #1e3a8a; border-left: 4px solid #3b82f6; padding-left: 12px; margin-bottom: 16px; }
+  .sec-sub { color: #6b7280; font-size: 13px; margin-top: -8px; margin-bottom: 16px; }
+  
+  /* 概览卡片 */
+  .overview-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .ov-card { background: #f8fafc; border-radius: 8px; padding: 20px; text-align: center; border: 1px solid #e2e8f0; }
+  .ov-num { font-size: 28px; font-weight: 700; color: #1e40af; }
+  .ov-label { font-size: 13px; color: #64748b; margin-top: 4px; }
+  
+  /* 表格 */
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+  th { background: #f1f5f9; padding: 10px 12px; text-align: left; font-weight: 600; font-size: 13px; border: 1px solid #e2e8f0; color: #334155; }
+  td { padding: 8px 12px; border: 1px solid #e2e8f0; font-size: 13px; }
+  
+  /* 风险分布条 */
+  .risk-bar { display: flex; height: 32px; border-radius: 6px; overflow: hidden; margin: 12px 0; }
+  .risk-seg { display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 500; }
+  
+  /* 薪资分布 */
+  .sal-bar-row { display: flex; align-items: center; margin-bottom: 6px; }
+  .sal-bar-label { width: 70px; font-size: 12px; color: #64748b; }
+  .sal-bar-track { flex: 1; height: 24px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+  .sal-bar-fill { height: 100%; background: linear-gradient(90deg, #3b82f6, #2563eb); border-radius: 4px; transition: width 0.3s; }
+  .sal-bar-val { width: 50px; text-align: right; font-size: 12px; font-weight: 600; color: #1e40af; }
+  
+  /* 行业分布 */
+  .cat-row { display: flex; align-items: center; margin-bottom: 6px; }
+  .cat-label { width: 160px; font-size: 12px; color: #334155; }
+  .cat-bar { flex: 1; height: 20px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+  .cat-fill { height: 100%; background: linear-gradient(90deg, #10b981, #059669); border-radius: 4px; }
+  .cat-val { width: 40px; text-align: right; font-size: 12px; color: #64748b; }
+  
+  /* 页脚 */
+  .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; color: #9ca3af; font-size: 12px; }
+  .footer .brand { color: #3b82f6; font-weight: 600; }
+  
+  /* 打印样式 */
+  @media print {
+    body { background: white; }
+    .report-wrap { padding: 0; max-width: 100%; }
+    .cover { border-radius: 0; }
+    .section { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="report-wrap">
+
+  <!-- 封面 -->
+  <div class="cover">
+    <div class="cover-logo">📊</div>
+    <div class="cover-title">小微行业知识库分析报告</div>
+    <div class="cover-sub">Micro & Small Industry Knowledge Base — Professional Analysis Report</div>
+    <div class="cover-meta">
+      <div>行业数量<span>${indCount}</span></div>
+      <div>职位数量<span>${jobCount}</span></div>
+      <div>覆盖城市<span>${cityCount}</span></div>
+    </div>
+  </div>
+
+  <!-- 目录 -->
+  <div class="section">
+    <div class="sec-title">报告目录</div>
+    <div style="columns: 2; font-size: 14px; line-height: 2;">
+      <div>一、数据概览</div>
+      <div>二、行业分布分析</div>
+      <div>三、薪资水平分析</div>
+      <div>四、风险等级分析</div>
+      <div>五、核心行业明细</div>
+      <div>六、重点职位清单</div>
+      <div>七、经营模式分析</div>
+      <div>八、资金需求特征</div>
+    </div>
+  </div>
+
+  <!-- 一、数据概览 -->
+  <div class="section">
+    <div class="sec-title">一、数据概览</div>
+    <div class="sec-sub">基于筛选条件的核心指标汇总</div>
+    <div class="overview-grid">
+      <div class="ov-card"><div class="ov-num">${indCount}</div><div class="ov-label">细分行业</div></div>
+      <div class="ov-card"><div class="ov-num">${jobCount}</div><div class="ov-label">职业岗位</div></div>
+      <div class="ov-card"><div class="ov-num">${cityCount}</div><div class="ov-label">覆盖城市</div></div>
+      <div class="ov-card"><div class="ov-num">${avgSalary ? (avgSalary/1000).toFixed(1) + 'k' : '-'}</div><div class="ov-label">平均月薪</div></div>
+    </div>
+    <div style="background: #eff6ff; border-radius: 8px; padding: 16px; font-size: 13px; color: #1e40af;">
+      <strong>💡 报告说明：</strong>本报告基于小微行业知识库V4.3数据生成，涵盖行业、职业、薪资、风险、经营模式等多维度分析，
+      可用于银行信贷审批、行业研究、职业规划等场景。数据仅供参考，实际决策请结合尽职调查。
+    </div>
+  </div>
+
+  <!-- 二、行业分布分析 -->
+  <div class="section">
+    <div class="sec-title">二、行业分布分析</div>
+    <div class="sec-sub">按行业大类的细分行业数量分布</div>
+    ${topCats.map(([cat, count]) => `
+    <div class="cat-row">
+      <div class="cat-label">${cat}</div>
+      <div class="cat-bar"><div class="cat-fill" style="width:${(count / topCats[0][1] * 100).toFixed(1)}%"></div></div>
+      <div class="cat-val">${count}</div>
+    </div>`).join('')}
+  </div>
+
+  <!-- 三、薪资水平分析 -->
+  <div class="section">
+    <div class="sec-title">三、薪资水平分析</div>
+    <div class="sec-sub">月薪中位数分布（共 ${jobCount} 个职位）</div>
+    ${Object.entries(salBins).map(([name, count]) => `
+    <div class="sal-bar-row">
+      <div class="sal-bar-label">${name}</div>
+      <div class="sal-bar-track"><div class="sal-bar-fill" style="width:${jobCount ? (count/jobCount*100).toFixed(1) : 0}%"></div></div>
+      <div class="sal-bar-val">${count}</div>
+    </div>`).join('')}
+    <div style="margin-top: 12px; padding: 12px; background: #f0fdf4; border-radius: 6px; font-size: 13px; color: #166534;">
+      <strong>📊 薪资洞察：</strong>平均月薪 ${avgSalary ? (avgSalary/1000).toFixed(1) + 'k' : '-'}，
+      ${salBins['8-12K'] > jobCount * 0.3 ? '主力薪资区间在8-12K，属于中等收入水平。' : salBins['3-5K'] > jobCount * 0.3 ? '入门岗占比较高，薪资水平偏低。' : '中高收入岗位占比较大。'}
+    </div>
+  </div>
+
+  <!-- 四、风险等级分析 -->
+  <div class="section">
+    <div class="sec-title">四、风险等级分析</div>
+    <div class="sec-sub">城市风险等级分布（共 ${filteredRisks.length} 条风险记录）</div>
+    <div class="risk-bar">
+      <div class="risk-seg" style="width:${filteredRisks.length ? (riskStats.A/filteredRisks.length*100).toFixed(1) : 0}%;background:#059669">${riskStats.A ? 'A ' + riskStats.A : ''}</div>
+      <div class="risk-seg" style="width:${filteredRisks.length ? (riskStats.B/filteredRisks.length*100).toFixed(1) : 0}%;background:#3b82f6">${riskStats.B ? 'B ' + riskStats.B : ''}</div>
+      <div class="risk-seg" style="width:${filteredRisks.length ? (riskStats.C/filteredRisks.length*100).toFixed(1) : 0}%;background:#d97706">${riskStats.C ? 'C ' + riskStats.C : ''}</div>
+      <div class="risk-seg" style="width:${filteredRisks.length ? (riskStats.D/filteredRisks.length*100).toFixed(1) : 0}%;background:#dc2626">${riskStats.D ? 'D ' + riskStats.D : ''}</div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:#64748b;margin-top:8px">
+      <span>🟢 A 低风险</span><span>🔵 B 中低风险</span><span>🟡 C 中等风险</span><span>🔴 D 高风险</span>
+    </div>
+  </div>
+
+  <!-- 五、核心行业明细 -->
+  <div class="section">
+    <div class="sec-title">五、核心行业明细</div>
+    <div class="sec-sub">${industries.length > 30 ? '显示前30个行业，完整数据请查看系统' : '全部 ' + industries.length + ' 个行业'}</div>
+    <table>
+      <thead><tr>
+        <th style="width:80px">行业编号</th>
+        <th style="width:120px">行业大类</th>
+        <th>细分行业</th>
+        <th style="width:80px">毛利率</th>
+        <th>前景趋势</th>
+      </tr></thead>
+      <tbody>${indListHtml}</tbody>
+    </table>
+  </div>
+
+  <!-- 六、重点职位清单 -->
+  <div class="section">
+    <div class="sec-title">六、重点职位清单</div>
+    <div class="sec-sub">${jobs.length > 20 ? '显示前20个职位，完整数据请查看系统' : '全部 ' + jobs.length + ' 个职位'}</div>
+    <table>
+      <thead><tr>
+        <th style="width:100px">职位编号</th>
+        <th>职位名称</th>
+        <th style="width:120px">所属行业</th>
+        <th style="width:100px;text-align:right">月薪中位</th>
+      </tr></thead>
+      <tbody>${jobListHtml}</tbody>
+    </table>
+  </div>
+
+  <!-- 七、经营模式 & 资金需求 -->
+  <div class="section">
+    <div class="sec-title">七、经营模式与资金需求特征</div>
+    <div style="background: #fffbeb; border-radius: 8px; padding: 16px; font-size: 13px; color: #92400e;">
+      <strong>⚠️ 授信提示：</strong>不同行业经营模式差异较大，建议结合具体细分行业的经营模式、资金周期、淡旺季特征
+      综合评估授信方案。重点关注：季节性资金缺口、应收账款周期、存货周转、现金流稳定性。
+    </div>
+  </div>
+
+  <!-- 页脚 -->
+  <div class="footer">
+    <div class="brand">小微行业知识库 · V4.3 Professional</div>
+    <div style="margin-top: 6px;">报告生成日期：${today} | 数据来源：小微行业知识库</div>
+    <div style="margin-top: 4px; font-size: 11px;">本报告仅供参考，不构成任何投资或授信建议。使用前请自行核实数据准确性。</div>
+  </div>
+
+</div>
+
+<script>
+  window.onload = function() {
+    setTimeout(function() { window.print(); }, 500);
+  };
+</script>
+</body>
+</html>`;
+
+  // 在新窗口打开并打印
+  const w = window.open('', '_blank');
+  w.document.write(reportHtml);
+  w.document.close();
+  toast('报告已生成', '请在新窗口中打印或保存为PDF', 'ok');
+}
+
 // ================================================================== 导出弹窗
 function showExportModal(inds, jobs, cities, allJobs, allRisks) {
   let html = '<div class="exp-options"><h4>选择导出内容</h4>';
@@ -2098,7 +2436,8 @@ function showExportModal(inds, jobs, cities, allJobs, allRisks) {
   html += '<label class="chk"><input type="checkbox" id="expRisk"> 城市风险</label>';
   html += '<label class="chk"><input type="checkbox" id="expSal"> 薪资数据</label>';
   html += '<hr><h4>导出格式</h4>';
-  html += '<label class="chk"><input type="radio" name="expFmt" value="csv" checked> CSV（可用Excel打开）</label>';
+  html += '<label class="chk"><input type="radio" name="expFmt" value="pdf" checked> 📄 PDF专业报告（推荐）</label>';
+  html += '<label class="chk"><input type="radio" name="expFmt" value="csv"> CSV（可用Excel打开）</label>';
   html += '<label class="chk"><input type="radio" name="expFmt" value="json"> JSON（原始数据）</label>';
   html += '</div>';
   
@@ -2122,6 +2461,11 @@ function doExport() {
   const cityList = q.cc.size ? [...q.cc] : DB.cities.map(c => c['城市名称']);
   const risks = DB.city_risks.filter(r => (!q.ci.size || q.ci.has(r['行业编号'])) && (!q.cc.size || q.cc.has(r['城市'])));
   
+  if (fmt === 'pdf') {
+    generatePdfReport(inds, jobList, cityList, allJobs, allRisks);
+    closeModal();
+    return;
+  }
   if (fmt === 'csv') {
     // CSV导出
     let csv = '';
