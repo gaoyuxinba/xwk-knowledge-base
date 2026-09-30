@@ -6,9 +6,9 @@
 
 // ------------------------------------------------------------------ 数据合并
 // 数据兼容：如果salary没有trend字段，从years字段生成
-if (window.XWK_DATA_5 && window.XWK_DATA_5.salary) {
-  for (const key in window.XWK_DATA_5.salary) {
-    const sd = window.XWK_DATA_5.salary[key];
+if (window.XWK_DATA_6 && window.XWK_DATA_6.salary) {
+  for (const key in window.XWK_DATA_6.salary) {
+    const sd = window.XWK_DATA_6.salary[key];
     if (!sd) continue;
     // 如果有years但没有trend，生成trend
     if (sd.years && !sd.trend) {
@@ -34,12 +34,15 @@ const DB = {
   industries: window.XWK_DATA_1 ? window.XWK_DATA_1.industries : [],
   modes: window.XWK_DATA_1 ? window.XWK_DATA_1.modes : [],
   cities: window.XWK_DATA_1 ? window.XWK_DATA_1.cities : [],
-  jobs: window.XWK_DATA_2 ? window.XWK_DATA_2.jobs : [],
-  city_risks: [
-    ...(window.XWK_DATA_3 ? window.XWK_DATA_3.city_risks : []),
-    ...(window.XWK_DATA_4 ? window.XWK_DATA_4.city_risks : []),
+  jobs: [
+    ...(window.XWK_DATA_2 ? window.XWK_DATA_2.jobs : []),
+    ...(window.XWK_DATA_3 ? window.XWK_DATA_3.jobs : []),
   ],
-  salary: window.XWK_DATA_5 ? window.XWK_DATA_5.salary : {},
+  city_risks: [
+    ...(window.XWK_DATA_4 ? window.XWK_DATA_4.city_risks : []),
+    ...(window.XWK_DATA_5 ? window.XWK_DATA_5.city_risks : []),
+  ],
+  salary: window.XWK_DATA_6 ? window.XWK_DATA_6.salary : {},
   city_factors: window.XWK_DATA_6 ? window.XWK_DATA_6.city_factors : {},
 };
 
