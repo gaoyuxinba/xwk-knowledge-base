@@ -681,3 +681,41 @@ table.heat td.c:hover{outline:2px solid var(--c-brand-2);outline-offset:-2px}
   .stat-val { font-size: 20px; }
   .topbar .title { font-size: 14px; }
 }
+
+/* V4.3 新增样式 */
+.trend-chart-wrap {
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 10px 0;
+}
+.trend-svg {
+  width: 100%;
+  height: auto;
+}
+.trend-area {
+  opacity: 0;
+  animation: fadeInArea 0.8s ease forwards;
+}
+.trend-line {
+  stroke-dasharray: 0, 1000;
+  animation: drawLine 1.2s ease forwards;
+}
+@keyframes fadeInArea {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes drawLine {
+  from { stroke-dasharray: 0, 2000; }
+  to { stroke-dasharray: 2000, 0; }
+}
+
+.salary-chart {
+  margin-bottom: 16px;
+}
+.chart-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 10px;
+}
