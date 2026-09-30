@@ -606,3 +606,78 @@ table.heat td.c:hover{outline:2px solid var(--c-brand-2);outline-offset:-2px}
   .cal-tbl td.cal-c{min-width:24px;padding:3px 1px;font-size:9px}
   .city-bars-legend{flex-direction:column;gap:4px}
 }
+
+.cat-filter { margin: 8px 0 4px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cf-label { font-size: 12px; color: #666; font-weight: 500; }
+.cf-chip { padding: 3px 10px; font-size: 12px; background: #f0f2f5; border-radius: 12px; cursor: pointer; transition: .2s; white-space: nowrap; }
+.cf-chip:hover { background: #e0e7ff; }
+.cf-chip.on { background: #4f46e5; color: white; }
+
+/* V4.1 new features */
+.tag { display: inline-block; padding: 2px 8px; font-size: 11px; border-radius: 10px; margin-right: 4px; margin-bottom: 4px; }
+.tag-red { background: #fee2e2; color: #dc2626; }
+.tag-orange { background: #ffedd5; color: #ea580c; }
+.tag-blue { background: #dbeafe; color: #2563eb; }
+.tag-green { background: #dcfce7; color: #16a34a; }
+.tag-gold { background: #fef3c7; color: #d97706; }
+.tag-purple { background: #f3e8ff; color: #9333ea; }
+.tag-indigo { background: #e0e7ff; color: #4f46e5; }
+.tag-cyan { background: #cffafe; color: #0891b2; }
+.tag-gray { background: #f3f4f6; color: #6b7280; }
+
+.fav-list { display: flex; flex-direction: column; gap: 8px; }
+.fav-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #f9fafb; border-radius: 8px; }
+.fav-item:hover { background: #f3f4f6; }
+.fi-main { font-size: 14px; }
+.fi-main .code { font-family: monospace; color: #6b7280; font-size: 12px; margin-right: 6px; }
+.fi-main .dim { color: #9ca3af; font-size: 12px; }
+.fi-act { display: flex; gap: 6px; }
+.empty-sm { padding: 20px; text-align: center; color: #9ca3af; font-size: 13px; background: #f9fafb; border-radius: 8px; }
+
+.cmp-table { overflow-x: auto; }
+.cmp-table table { width: 100%; border-collapse: collapse; min-width: 500px; }
+.cmp-table th, .cmp-table td { border: 1px solid #e5e7eb; padding: 10px 12px; text-align: left; vertical-align: top; font-size: 13px; }
+.cmp-table th { background: #f9fafb; font-weight: 600; }
+.cmp-label { background: #f3f4f6; font-weight: 500; color: #374151; width: 100px; white-space: nowrap; }
+.cmp-th-name { font-size: 15px; font-weight: 600; color: #111827; margin-bottom: 4px; }
+.cmp-th-sub { font-size: 12px; color: #6b7280; margin-bottom: 8px; }
+
+.exp-options h4 { margin: 0 0 10px; font-size: 14px; color: #374151; }
+.exp-options hr { border: none; border-top: 1px solid #e5e7eb; margin: 16px 0; }
+.exp-options .chk { display: block; padding: 6px 0; cursor: pointer; font-size: 13px; }
+.exp-options .chk input { margin-right: 8px; }
+
+.fav-btn { background: none; border: none; cursor: pointer; font-size: 16px; padding: 4px 8px; border-radius: 4px; transition: .2s; }
+.fav-btn:hover { background: #fef3c7; }
+.fav-btn.active { color: #f59e0b; }
+.cmp-btn { font-size: 11px; padding: 2px 6px; border-radius: 4px; cursor: pointer; background: #e0e7ff; color: #4f46e5; border: none; }
+.cmp-btn:hover { background: #c7d2fe; }
+.cmp-btn.active { background: #4f46e5; color: white; }
+
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); transition: transform .3s; z-index: 100; width: 260px; }
+  .sidebar.open { transform: translateX(0); }
+  .main { margin-left: 0; }
+  .topbar { left: 0; padding: 0 12px; }
+  #navToggle { display: block; }
+  .dash-stats { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .stat-card { padding: 12px; }
+  .stat-val { font-size: 22px; }
+  .stat-spark { display: none; }
+  .qbar { flex-direction: column; gap: 10px; }
+  .qbox { width: 100%; }
+  .statusline { flex-direction: column; gap: 8px; align-items: flex-start; }
+  .idbox { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .chipbar { max-height: 80px; }
+  .chip { font-size: 11px; padding: 3px 8px; }
+  .cat-filter { gap: 4px; }
+  .cf-chip { font-size: 11px; padding: 2px 8px; }
+  .cf-label { font-size: 11px; width: 100%; margin-bottom: 4px; }
+  .fld-grid { grid-template-columns: 1fr; }
+  .modal { width: 92%; max-width: 360px; }
+}
+@media (max-width: 480px) {
+  .dash-stats { grid-template-columns: repeat(2, 1fr); }
+  .stat-val { font-size: 20px; }
+  .topbar .title { font-size: 14px; }
+}
