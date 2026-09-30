@@ -1,4 +1,4 @@
-window.XWK_DATA.data ={
+window.XWK_DATA_3 ={
   "jobs": [
     {
       "行业编号": "NE01",
