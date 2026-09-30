@@ -1125,7 +1125,12 @@ function getAnalyticsCtx() {
 
   const demandMap = { '高': 0, '中': 0, '低': 0 };
   for (const s of salaryStats) {
-    demandMap[s.demand] = (demandMap[s.demand] || 0) + 1;
+    const d = s.demand;
+    let level = '中';
+    if (d === '高' || d === '中高' || d === '旺盛' || d === 'hot') level = '高';
+    else if (d === '中' || d === '中等' || d === '稳定' || d === 'warm' || d === '一般') level = '中';
+    else if (d === '低' || d === '较低' || d === '冷' || d === 'cool' || d === '少') level = '低';
+    demandMap[level] = (demandMap[level] || 0) + 1;
   }
 
   return { inds, jobs, modes, risks, cities, t, cats, catMax, lvMap, lvTotal, cityRiskMap, cityRows, indRisk, topRisk, bestRisk, salaryStats, salaryBins, sMax, demandMap };
