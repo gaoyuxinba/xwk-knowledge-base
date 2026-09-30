@@ -1,5 +1,5 @@
 /* ============================================================
-   小微行业知识库看板 V3 · 纯静态版
+   小微行业知识库 V4.0 · 纯静态版
    数据全部内嵌，无后端依赖
    ============================================================ */
 'use strict';
@@ -56,21 +56,21 @@ const DB = {
     ...(window.XWK_DATA_2 ? window.XWK_DATA_2.jobs : []),
     ...(window.XWK_DATA_3 ? window.XWK_DATA_3.jobs : []),
     ...(window.XWK_DATA_4 ? window.XWK_DATA_4.jobs : []),
-    ...(window.XWK_DATA_5 ? window.XWK_DATA_5.jobs : []),
   ],
   city_risks: [
+    ...(window.XWK_DATA_5 ? window.XWK_DATA_5.city_risks : []),
     ...(window.XWK_DATA_6 ? window.XWK_DATA_6.city_risks : []),
-    ...(window.XWK_DATA_7 ? window.XWK_DATA_7.city_risks : []),
   ],
   salary: {
+    ...(window.XWK_DATA_7 ? window.XWK_DATA_7.salary : {}),
     ...(window.XWK_DATA_8 ? window.XWK_DATA_8.salary : {}),
     ...(window.XWK_DATA_9 ? window.XWK_DATA_9.salary : {}),
   },
-  city_factors: window.XWK_DATA_8 ? window.XWK_DATA_8.city_factors : {},
+  city_factors: (window.XWK_DATA_9 && window.XWK_DATA_9.city_factors) ? window.XWK_DATA_9.city_factors : {},
 };
 
 // localStorage 编辑覆盖层
-const EDITS_KEY = 'xwk_edits_v3';
+const EDITS_KEY = 'xwk_edits_v4';
 function loadEdits() { try { return JSON.parse(localStorage.getItem(EDITS_KEY) || '{}'); } catch { return {}; } }
 function saveEdits(e) { localStorage.setItem(EDITS_KEY, JSON.stringify(e)); }
 let EDITS = loadEdits();
@@ -90,6 +90,8 @@ const S = {
   page: 'dashboard',
   dash: { industry: '', job: '', city: '', ci: new Set(), cj: new Set(), cc: new Set(), queried: false },
   cache: {},
+  favorites: JSON.parse(localStorage.getItem('xwk_favs_v4') || '{"industries":[],"jobs":[],"cities":[]}'),
+  compare: JSON.parse(localStorage.getItem('xwk_cmp_v4') || '[]'),
 };
 
 const $ = (s, r) => (r || document).querySelector(s);
@@ -98,6 +100,148 @@ const esc = (v) => String(v == null ? '' : v)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const nl2br = (v) => esc(v).replace(/\n/g, '<br>');
+
+// ---- 拼音首字母索引（常用字）
+const PY_MAP = {};
+(function buildPyMap() {
+  // 简化版：为常用职位/行业关键词建立拼音首字母映射
+  const pyDict = {
+    // 行业相关
+    '互':'H','联':'L','网':'W','金':'J','融':'R','银':'Y','行':'X','证':'Z','券':'Q','保':'B','险':'X',
+    '房':'F','地':'D','产':'C','建':'J','筑':'Z','工':'G','程':'C','制':'Z','造':'Z','汽':'Q','车':'C',
+    '医':'Y','疗':'L','药':'Y','品':'P','教':'J','育':'Y','培':'P','训':'X','零':'L','售':'S','电':'D','商':'S',
+    '物':'W','流':'L','仓':'C','储':'C','餐':'C','饮':'Y','酒':'J','店':'D','旅':'L','游':'Y','美':'M','容':'R',
+    '发':'F','型':'X','互':'H','健':'J','身':'S','会':'H','所':'S','家':'J','政':'Z','保':'B','姆':'M','月':'Y','嫂':'S',
+    '快':'K','递':'D','外':'W','卖':'M','维':'W','修':'X','洗':'X','车':'C','影':'Y','院':'Y','视':'S','听':'T',
+    '体':'T','育':'Y','运':'Y','动':'D','会':'H','计':'J','律':'L','师':'S','咨':'Z','询':'X','设':'S','计':'J',
+    '广':'G','告':'G','传':'C','媒':'M','软':'R','件':'J','硬':'Y','人':'R','力':'L','资':'Z','源':'Y',
+    '房':'F','地':'D','中':'Z','介':'J','物':'W','业':'Y','物':'W','流':'L','航':'H','空':'K','军':'J','工':'G',
+    '新':'X','能':'N','源':'Y','环':'H','保':'B','生':'S','物':'W','器':'Q','械':'X',
+    '零':'L','部':'B','件':'J','配':'P','件':'J','制':'Z','造':'Z','钢':'G','铁':'T','有':'Y','色':'S',
+    '化':'H','工':'G','塑':'S','料':'L','纺':'F','织':'Z','食':'S','品':'P','饮':'Y','料':'L',
+    '能':'N','源':'Y','矿':'K','业':'Y','石':'S','油':'Y','电':'D','力':'L','核':'H',
+    '公':'G','交':'J','出':'C','租':'Z','轨':'G','道':'D','水':'S','运':'Y','航':'H','运':'Y',
+    '农':'N','林':'L','牧':'M','渔':'Y','种':'Z','植':'Z','养':'Y','殖':'Z',
+    '政':'Z','府':'F','事':'S','业':'Y','非':'F','营':'Y','利':'L','社':'S','会':'H',
+    '销':'X','售':'S','财':'C','务':'W','人':'R','事':'S','行':'X','政':'Z','前':'Q','台':'T',
+    '行':'H','政':'Z','助':'Z','理':'L','文':'W','员':'Y','专':'Z','员':'Y','主':'Z','管':'G',
+    '经':'J','理':'L','总':'Z','监':'J','总':'Z','裁':'C','副':'F','董':'D','事':'S',
+    // 职位相关
+    '程':'C','序':'X','开':'K','发':'F','测':'C','试':'S','产':'C','品':'P','运':'Y','营':'Y',
+    '设':'S','计':'J','师':'S','工':'G','程':'C','师':'S','专':'Z','员':'Y','助':'Z','理':'L',
+    '经':'J','理':'L','主':'Z','管':'G','总':'Z','监':'J','总':'Z','裁':'C','副':'F','董':'D',
+    '销':'X','售':'S','业':'Y','务':'W','客':'K','服':'F','招':'Z','聘':'P','培':'P','训':'X',
+    '财':'C','会':'H','出':'C','纳':'N','会':'H','计':'J','审':'S','计':'J',
+    '采':'C','购':'G','仓':'C','管':'G','质':'Z','量':'L','安':'A','全':'Q',
+    '司':'S','机':'J','司':'S','仪':'Y','司':'S','厨':'C','师':'S','保':'B','安':'A',
+    '保':'B','洁':'J','电':'D','工':'G','木':'M','工':'G','瓦':'W','工':'G','焊':'H','工':'G',
+    '装':'Z','修':'X','美':'M','发':'F','美':'M','甲':'J','美':'M','容':'R',
+    '导':'D','购':'G','店':'D','长':'Z','收':'S','银':'Y','理':'L','货':'H','员':'Y',
+    '快':'K','递':'D','员':'Y','外':'W','卖':'M','员':'Y','司':'S','机':'J','驾':'J','驶':'S',
+    '护':'H','士':'S','医':'Y','生':'S','药':'Y','剂':'J','检':'J','验':'Y',
+    '老':'L','师':'S','教':'J','练':'L','辅':'F','导':'D','培':'P','训':'X',
+    '设':'S','计':'J','师':'S','画':'H','师':'S','插':'C','画':'H','动':'D','画':'H',
+    '策':'C','划':'H','运':'Y','营':'Y','推':'T','广':'G','文':'W','案':'A',
+    '编':'B','辑':'J','记':'J','者':'Z','摄':'S','影':'Y','剪':'J','辑':'J',
+    '飞':'F','行':'X','员':'Y','乘':'C','务':'W','空':'K','乘':'C','安':'A','保':'B',
+  };
+  for (const k in pyDict) {
+    if (!PY_MAP[k]) PY_MAP[k] = [];
+    if (!PY_MAP[k].includes(pyDict[k])) PY_MAP[k].push(pyDict[k]);
+  }
+})();
+
+function getInitials(str) {
+  if (!str) return '';
+  let result = '';
+  for (const ch of str) {
+    if (/[a-zA-Z]/.test(ch)) {
+      result += ch.toLowerCase();
+    } else if (PY_MAP[ch]) {
+      result += PY_MAP[ch][0].toLowerCase();
+    }
+  }
+  return result;
+}
+
+// 智能模糊匹配：支持中文包含、拼音首字母、拼音全拼
+function fuzzyMatch(text, keyword) {
+  if (!keyword) return false;
+  text = text || '';
+  const kw = keyword.toLowerCase();
+  // 中文直接匹配
+  if (text.toLowerCase().includes(kw)) return true;
+  // 拼音首字母匹配
+  if (getInitials(text).includes(kw)) return true;
+  return false;
+}
+
+// ---- 收藏夹
+function toggleFav(type, key) {
+  const arr = S.favorites[type] || [];
+  const idx = arr.indexOf(key);
+  if (idx >= 0) {
+    arr.splice(idx, 1);
+    toast('已取消收藏', key, '');
+  } else {
+    arr.push(key);
+    toast('已收藏', key, 'ok');
+  }
+  localStorage.setItem('xwk_favs_v4', JSON.stringify(S.favorites));
+  return idx < 0;
+}
+function isFav(type, key) {
+  return (S.favorites[type] || []).includes(key);
+}
+
+// ---- 职位对比
+function toggleCompare(jobKey) {
+  const idx = S.compare.indexOf(jobKey);
+  if (idx >= 0) {
+    S.compare.splice(idx, 1);
+    toast('已移除对比', jobKey, '');
+  } else {
+    if (S.compare.length >= 3) {
+      toast('最多对比3个', '请先移除一些', 'err');
+      return false;
+    }
+    S.compare.push(jobKey);
+    toast('已加入对比', jobKey + ' (' + S.compare.length + '/3)', 'ok');
+  }
+  localStorage.setItem('xwk_cmp_v4', JSON.stringify(S.compare));
+  return true;
+}
+function isInCompare(jobKey) {
+  return S.compare.includes(jobKey);
+}
+
+// ---- 职位标签生成
+function getJobTags(job, salaryInfo) {
+  const tags = [];
+  const name = job['常见职位'] || '';
+  // 热度标签
+  if (salaryInfo && salaryInfo.demand === '高') tags.push({ t: '🔥 高需求', c: 'tag-red' });
+  else if (salaryInfo && salaryInfo.demand === '中高') tags.push({ t: '⭐ 需求中高', c: 'tag-orange' });
+  else tags.push({ t: '📊 需求稳定', c: 'tag-blue' });
+  
+  // 薪资标签
+  if (salaryInfo && salaryInfo.monthly_median > 20000) tags.push({ t: '💰 高薪', c: 'tag-gold' });
+  else if (salaryInfo && salaryInfo.monthly_median > 12000) tags.push({ t: '💎 薪资较好', c: 'tag-green' });
+  
+  // 入门门槛
+  const isEntry = /助理|实习|初级|见习|文员|前台|出纳|客服|员/.test(name);
+  const isSenior = /总监|首席|总经理|总裁|CEO|高级|资深|专家|架构师|研究员/.test(name);
+  const isMgmt = /经理|主管|部长|主任|总监/.test(name);
+  if (isEntry) tags.push({ t: '🚪 门槛低', c: 'tag-gray' });
+  else if (isSenior) tags.push({ t: '🎓 高门槛', c: 'tag-purple' });
+  else if (isMgmt) tags.push({ t: '👔 管理岗', c: 'tag-indigo' });
+  else tags.push({ t: '📈 有上升空间', c: 'tag-cyan' });
+  
+  // 增长趋势
+  if (salaryInfo && salaryInfo.trend && salaryInfo.trend.includes('10%')) tags.push({ t: '📈 增长快', c: 'tag-green' });
+  
+  return tags;
+}
 
 // ------------------------------------------------------------------ 提示
 function toast(title, msg, type) {
@@ -183,6 +327,8 @@ const NAV = [
   ]},
   { g: '数据操作', items: [
     { id: 'search', ico: '🔍', t: '全局搜索' },
+    { id: 'favorites', ico: '⭐', t: '我的收藏', badge: () => (S.favorites.industries.length + S.favorites.jobs.length + S.favorites.cities.length) },
+    { id: 'compare', ico: '⚖️', t: '职位对比', badge: () => S.compare.length },
     { id: 'dataupdate', ico: '🔄', t: '数据更新' },
   ]},
 ];
@@ -212,6 +358,7 @@ const PAGE_TITLE = {
   'ana-finance': '资金分析',
   analytics: '分析中心', industries: '行业管理', jobs: '职业管理',
   cityrisks: '城市风控', modes: '经营模式', search: '全局搜索', dataupdate: '数据更新',
+  favorites: '我的收藏', compare: '职位对比',
 };
 
 function go(page) {
@@ -242,7 +389,7 @@ function doLogin() {
     if (errEl) errEl.textContent = '账号或密码不正确';
     return false;
   }
-  try { localStorage.removeItem('xwk_edits_v3'); localStorage.removeItem('xwk_saved_v2'); localStorage.removeItem('xwk_recent_v2'); } catch(e) {}
+  try { localStorage.removeItem('xwk_edits_v4'); localStorage.removeItem('xwk_saved_v2'); localStorage.removeItem('xwk_recent_v2'); } catch(e) {}
   S.user = acc;
   const lv = $('#loginView');
   const av = $('#appView');
@@ -283,7 +430,7 @@ $('#navToggle').onclick = () => $('.sidebar').classList.toggle('open');
 function renderMeta() {
   const m = DB.meta;
   $('#metaMini').innerHTML = `<b>${m.industry_count}</b> 行业 · <b>${m.job_count}</b> 职业 · <b>${m.city_count}</b> 城市`;
-  $('#dataUpdate').innerHTML = `<span class="dot"></span>数据更新：${new Date().toLocaleDateString('zh-CN')}`;
+  $('#dataUpdate').innerHTML = `<span class="dot"></span>数据更新：V4.0 · ${new Date().toLocaleDateString('zh-CN')}`;
 }
 
 // ================================================================== 看板
@@ -291,7 +438,7 @@ function pageDashboard(c) {
   const q = S.dash;
   const inds = DB.industries, jobs = DB.jobs, risks = DB.city_risks, salary = DB.salary;
   const cities = DB.cities;
-  const catCount = new Set(inds.map(i => i['行业门类'])).size;
+  const catCount = new Set(inds.map(i => i['行业大类'] || i['行业门类'])).size;
   const highRisk = risks.filter(r => normLv(r['风险层级']) === 'D').length;
   const highDemand = Object.values(salary).filter(s => s.demand === '高').length;
   const avgSalary = Math.round(Object.values(salary).reduce((a,s) => a + (s.monthly_median||0), 0) / Math.max(1, Object.keys(salary).length));
@@ -345,6 +492,7 @@ function pageDashboard(c) {
         <div class="qt"><span class="n">1</span>行业查询</div>
         <input type="text" id="qInd" name="off-qInd" autocomplete="off" placeholder="输入行业编号、名称或关键词（如 劳务、火锅、软件）" value="${esc(q.industry)}">
         <div class="qmeta" id="mInd">输入关键词后点选下方标签</div>
+        <div class="cat-filter" id="catFilter"></div>
         <div class="chipbar" id="chInd"></div>
         <div class="qhint" id="hInd"></div>
       </div>
@@ -413,10 +561,10 @@ function updateChips() {
     const kw = q.industry.trim().toLowerCase();
     indCandidates = industries.filter(r =>
       r['行业编号'].toLowerCase().includes(kw) ||
-      r['细分行业'].toLowerCase().includes(kw) ||
-      r['行业门类'].toLowerCase().includes(kw) ||
-      (r['职业标签串'] || '').toLowerCase().includes(kw)
-    ).slice(0, 8);
+      fuzzyMatch(r['细分行业'], kw) ||
+      fuzzyMatch(r['行业大类'] || r['行业门类'], kw) ||
+      fuzzyMatch(r['职业标签串'] || '', kw)
+    ).slice(0, 12);
   }
 
   // 行业提示词
@@ -448,7 +596,7 @@ function updateChips() {
   let jobCandidates = [];
   if (q.job.trim() && jobPool.length) {
     const kw = q.job.trim().toLowerCase();
-    jobCandidates = jobPool.filter(j => j['常见职位'].toLowerCase().includes(kw)).slice(0, 12);
+    jobCandidates = jobPool.filter(j => fuzzyMatch(j['常见职位'], kw)).slice(0, 15);
   } else if (jobPool.length) {
     jobCandidates = jobPool.slice(0, 12);
   }
@@ -476,8 +624,8 @@ function updateChips() {
   if (q.city.trim()) {
     const kw = q.city.trim().toLowerCase();
     cityCandidates = cities.filter(r =>
-      r['城市名称'].toLowerCase().includes(kw) ||
-      (r['定位标签'] || '').toLowerCase().includes(kw)
+      fuzzyMatch(r['城市名称'], kw) ||
+      fuzzyMatch(r['定位标签'] || '', kw)
     );
   } else {
     cityCandidates = cities;
@@ -520,6 +668,7 @@ function renderDash() {
     `职业：<b>${esc(jobLabel)}</b><span class="sep">｜</span>` +
     `城市：<b>${esc(cityLabel)}</b></span>` +
     `<span class="act">
+      <button class="btn sm" id="bExport">📥 导出</button>
       <button class="btn sm" id="bReset2">重置全部</button>
       <button class="btn green sm" id="bQuery2">查询数据</button>
     </span>`;
@@ -532,6 +681,8 @@ function renderDash() {
     toast('查询', '行业' + S.dash.ci.size + ' 职业' + S.dash.cj.size + ' 城市' + S.dash.cc.size);
     renderDash();
   };
+  const expBtn = $('#bExport');
+  if (expBtn) expBtn.onclick = () => showExportModal(indRecords, selectedJobs, selectedCities, jobs, risks);
 
   let html = '';
 
@@ -1752,6 +1903,269 @@ function pageDataUpdate(c) {
 }
 
 // ================================================================== 页面注册
+
+// ================================================================== 收藏夹页面
+function pageFavorites(c) {
+  c.innerHTML = '<div class="card"><div class="card-hd"><h3>⭐ 我的收藏</h3></div><div class="card-bd" id="favBody"></div></div>';
+  const body = $('#favBody');
+  const favs = S.favorites;
+  let html = '';
+  
+  // 收藏的行业
+  const favInds = DB.industries.filter(i => favs.industries.includes(i['行业编号']));
+  html += '<div class="sec-h">🏢 收藏的行业 (' + favInds.length + ')</div>';
+  if (favInds.length) {
+    html += '<div class="fav-list">';
+    for (const ind of favInds) {
+      html += '<div class="fav-item"><div class="fi-main"><span class="code">' + esc(ind['行业编号']) + '</span> ' + esc(ind['细分行业']) + ' <span class="dim">(' + esc(ind['行业大类'] || ind['行业门类'] || '') + ')</span></div>' +
+        '<div class="fi-act"><button class="btn xs" onclick="goIndustryDetail(\'' + ind['行业编号'] + '\')">查看</button>' +
+        '<button class="btn xs red" onclick="removeFav(\'industries\',\'' + ind['行业编号'] + '\')">移除</button></div></div>';
+    }
+    html += '</div>';
+  } else {
+    html += '<div class="empty-sm">暂无收藏的行业，在数据看板中点击⭐按钮收藏</div>';
+  }
+  
+  // 收藏的职位
+  const favJobs = DB.jobs.filter(j => favs.jobs.includes(j['行业编号'] + '|' + j['常见职位']));
+  html += '<div class="sec-h" style="margin-top:20px">👥 收藏的职位 (' + favJobs.length + ')</div>';
+  if (favJobs.length) {
+    html += '<div class="fav-list">';
+    for (const job of favJobs) {
+      const ind = DB.industries.find(i => i['行业编号'] === job['行业编号']);
+      html += '<div class="fav-item"><div class="fi-main">' + esc(job['常见职位']) + ' <span class="dim">(' + esc(ind ? ind['细分行业'] : job['行业编号']) + ')</span></div>' +
+        '<div class="fi-act"><button class="btn xs" onclick="goJobDetail(\'' + job['行业编号'] + '\',\'' + job['常见职位'] + '\')">查看</button>' +
+        '<button class="btn xs red" onclick="removeFav(\'jobs\',\'' + (job['行业编号'] + '|' + job['常见职位']) + '\')">移除</button></div></div>';
+    }
+    html += '</div>';
+  } else {
+    html += '<div class="empty-sm">暂无收藏的职位</div>';
+  }
+  
+  // 收藏的城市
+  const favCities = DB.cities.filter(c2 => favs.cities.includes(c2['城市名称']));
+  html += '<div class="sec-h" style="margin-top:20px">🏙 收藏的城市 (' + favCities.length + ')</div>';
+  if (favCities.length) {
+    html += '<div class="fav-list">';
+    for (const ct of favCities) {
+      html += '<div class="fav-item"><div class="fi-main">' + esc(ct['城市名称']) + ' <span class="dim">(' + esc(ct['定位标签'] || '') + ')</span></div>' +
+        '<div class="fi-act"><button class="btn xs red" onclick="removeFav(\'cities\',\'' + ct['城市名称'] + '\')">移除</button></div></div>';
+    }
+    html += '</div>';
+  } else {
+    html += '<div class="empty-sm">暂无收藏的城市</div>';
+  }
+  
+  body.innerHTML = html;
+}
+function removeFav(type, key) {
+  const arr = S.favorites[type] || [];
+  const idx = arr.indexOf(key);
+  if (idx >= 0) arr.splice(idx, 1);
+  localStorage.setItem('xwk_favs_v4', JSON.stringify(S.favorites));
+  toast('已移除', key);
+  if (S.page === 'favorites') pageFavorites($('#content'));
+  renderNav();
+}
+function goIndustryDetail(code) {
+  S.dash.ci = new Set([code]);
+  S.dash.queried = true;
+  go('dashboard');
+}
+function goJobDetail(code, job) {
+  S.dash.ci = new Set([code]);
+  S.dash.cj = new Set([job]);
+  S.dash.queried = true;
+  go('dashboard');
+}
+
+// ================================================================== 职位对比页面
+function pageCompare(c) {
+  c.innerHTML = '<div class="card"><div class="card-hd"><h3>⚖️ 职位对比</h3><p class="dim">最多同时对比3个职位</p></div><div class="card-bd" id="cmpBody"></div></div>';
+  const body = $('#cmpBody');
+  const cmpKeys = S.compare;
+  
+  if (!cmpKeys.length) {
+    body.innerHTML = '<div class="empty">还没有添加对比职位<br><small>在职位详情页点击「加入对比」按钮添加</small></div>';
+    return;
+  }
+  
+  // 获取职位数据
+  const cmpJobs = cmpKeys.map(k => {
+    const [code, name] = k.split('|');
+    return DB.jobs.find(j => j['行业编号'] === code && j['常见职位'] === name);
+  }).filter(Boolean);
+  
+  if (!cmpJobs.length) {
+    body.innerHTML = '<div class="empty">对比数据失效，请重新添加</div>';
+    return;
+  }
+  
+  // 构建对比表格
+  const city = DB.cities[0] ? DB.cities[0]['城市名称'] : '上海';
+  let html = '<div class="cmp-table"><table><thead><tr><th>对比项</th>';
+  for (const j of cmpJobs) {
+    const ind = DB.industries.find(i => i['行业编号'] === j['行业编号']);
+    html += '<th><div class="cmp-th-name">' + esc(j['常见职位']) + '</div><div class="cmp-th-sub">' + esc(ind ? ind['细分行业'] : j['行业编号']) + '</div>' +
+      '<button class="btn xs red" onclick="removeCmp(\'' + (j['行业编号'] + '|' + j['常见职位']) + '\')">移除</button></th>';
+  }
+  html += '</tr></thead><tbody>';
+  
+  const rows = [
+    ['所属行业', j => { const ind = DB.industries.find(i => i['行业编号'] === j['行业编号']); return ind ? ind['细分行业'] : j['行业编号']; }],
+    ['岗位内容', j => j['这个岗位每天干什么'] || '—'],
+    ['审核要点', j => j['审批要点'] || '—'],
+    ['入门门槛', j => {
+      const n = j['常见职位'];
+      if (/总监|首席|总经理|总裁|CEO|高级|资深|专家/.test(n)) return '🔴 高门槛（需多年经验）';
+      if (/经理|主管|架构师/.test(n)) return '🟠 中高门槛（需管理/技术经验）';
+      if (/工程师|设计师|专员|分析师/.test(n)) return '🟡 中等门槛（需专业技能）';
+      return '🟢 低门槛（易上手）';
+    }],
+    ['薪资水平', j => {
+      const sal = DB.salary[j['行业编号'] + '|' + j['常见职位']];
+      if (sal && sal.city_salaries && sal.city_salaries[city]) {
+        const s = sal.city_salaries[city];
+        return '💰 ' + (s.monthly_min/1000).toFixed(1) + '-' + (s.monthly_max/1000).toFixed(1) + 'k /月<br><span class="dim">中位数 ' + (s.monthly_median/1000).toFixed(1) + 'k</span>';
+      }
+      return '—';
+    }],
+    ['薪资趋势', j => {
+      const sal = DB.salary[j['行业编号'] + '|' + j['常见职位']];
+      return sal ? sal.trend || '—' : '—';
+    }],
+    ['需求程度', j => {
+      const sal = DB.salary[j['行业编号'] + '|' + j['常见职位']];
+      const d = sal ? sal.demand : '—';
+      const map = {'高': '🔥 高需求', '中高': '⭐ 中高需求', '中等': '📊 需求稳定'};
+      return map[d] || d;
+    }],
+    ['常见破绽', j => j['没干过的破绽'] || '—'],
+  ];
+  
+  for (const [label, fn] of rows) {
+    html += '<tr><td class="cmp-label">' + label + '</td>';
+    for (const j of cmpJobs) {
+      html += '<td>' + nl2br(fn(j)) + '</td>';
+    }
+    html += '</tr>';
+  }
+  
+  html += '</tbody></table></div>';
+  html += '<div style="margin-top:16px;text-align:center"><button class="btn" onclick="clearCmp()">清空对比</button></div>';
+  
+  body.innerHTML = html;
+}
+function removeCmp(key) {
+  const idx = S.compare.indexOf(key);
+  if (idx >= 0) S.compare.splice(idx, 1);
+  localStorage.setItem('xwk_cmp_v4', JSON.stringify(S.compare));
+  if (S.page === 'compare') pageCompare($('#content'));
+  renderNav();
+}
+function clearCmp() {
+  S.compare = [];
+  localStorage.setItem('xwk_cmp_v4', '[]');
+  if (S.page === 'compare') pageCompare($('#content'));
+  renderNav();
+}
+
+// ================================================================== 导出弹窗
+function showExportModal(inds, jobs, cities, allJobs, allRisks) {
+  let html = '<div class="exp-options"><h4>选择导出内容</h4>';
+  html += '<label class="chk"><input type="checkbox" id="expInd" checked> 行业信息</label>';
+  html += '<label class="chk"><input type="checkbox" id="expJob" checked> 职位详情（专家经验）</label>';
+  html += '<label class="chk"><input type="checkbox" id="expRisk"> 城市风险</label>';
+  html += '<label class="chk"><input type="checkbox" id="expSal"> 薪资数据</label>';
+  html += '<hr><h4>导出格式</h4>';
+  html += '<label class="chk"><input type="radio" name="expFmt" value="csv" checked> CSV（可用Excel打开）</label>';
+  html += '<label class="chk"><input type="radio" name="expFmt" value="json"> JSON（原始数据）</label>';
+  html += '</div>';
+  
+  modal('📥 导出数据', html, 
+    '<button class="btn" onclick="closeModal()">取消</button>' +
+    '<button class="btn green" onclick="doExport()">开始导出</button>');
+}
+
+function doExport() {
+  const expInd = document.getElementById('expInd').checked;
+  const expJob = document.getElementById('expJob').checked;
+  const expRisk = document.getElementById('expRisk').checked;
+  const expSal = document.getElementById('expSal').checked;
+  const fmt = document.querySelector('input[name="expFmt"]:checked').value;
+  
+  const q = S.dash;
+  const inds = q.ci.size ? DB.industries.filter(i => q.ci.has(i['行业编号'])) : DB.industries;
+  const jobList = q.cj.size 
+    ? DB.jobs.filter(j => q.ci.has(j['行业编号']) && q.cj.has(j['常见职位']))
+    : (q.ci.size ? DB.jobs.filter(j => q.ci.has(j['行业编号'])) : DB.jobs);
+  const cityList = q.cc.size ? [...q.cc] : DB.cities.map(c => c['城市名称']);
+  const risks = DB.city_risks.filter(r => (!q.ci.size || q.ci.has(r['行业编号'])) && (!q.cc.size || q.cc.has(r['城市'])));
+  
+  if (fmt === 'csv') {
+    // CSV导出
+    let csv = '';
+    if (expInd) {
+      csv += '【行业信息】\n';
+      csv += '行业编号,行业大类,细分行业,前景趋势,毛利率区间,净利率区间\n';
+      for (const i of inds) {
+        csv += [i['行业编号'], i['行业大类'] || i['行业门类'] || '', i['细分行业'], i['前景趋势判断'] || '', i['毛利率区间'] || '', i['净利率区间'] || '']
+          .map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',') + '\n';
+      }
+      csv += '\n';
+    }
+    if (expJob) {
+      csv += '【职位详情】\n';
+      csv += '行业编号,细分行业,职位名称,每天干什么,审核时怎么问,审批要点\n';
+      for (const j of jobList) {
+        csv += [j['行业编号'], j['细分行业'], j['常见职位'], j['这个岗位每天干什么'] || '', j['审核时怎么问'] || '', j['审批要点'] || '']
+          .map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',') + '\n';
+      }
+      csv += '\n';
+    }
+    if (expRisk) {
+      csv += '【城市风险】\n';
+      csv += '行业编号,城市,风险等级,风险评分\n';
+      for (const r of risks) {
+        csv += [r['行业编号'], r['城市'], r['风险层级'], r['风险评分']]
+          .map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',') + '\n';
+      }
+    }
+    
+    downloadFile(csv, '小微行业知识库_数据导出.csv', 'text/csv;charset=utf-8');
+  } else {
+    // JSON导出
+    const data = {};
+    if (expInd) data.industries = inds;
+    if (expJob) data.jobs = jobList;
+    if (expRisk) data.city_risks = risks;
+    if (expSal) {
+      data.salary = {};
+      for (const j of jobList) {
+        const k = j['行业编号'] + '|' + j['常见职位'];
+        if (DB.salary[k]) data.salary[k] = DB.salary[k];
+      }
+    }
+    data.export_time = new Date().toISOString();
+    data.source = '小微行业知识库 V4.1';
+    
+    downloadFile(JSON.stringify(data, null, 2), '小微行业知识库_数据导出.json', 'application/json');
+  }
+  
+  closeModal();
+  toast('导出成功', '文件已下载', 'ok');
+}
+
+function downloadFile(content, filename, type) {
+  const blob = new Blob(['\uFEFF' + content], { type: type || 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 const PAGES = {
   dashboard: pageDashboard,
   'ana-industry': pageAnaIndustry,
@@ -1765,6 +2179,8 @@ const PAGES = {
   cityrisks: pageCityRisks,
   modes: pageModes,
   search: pageSearch,
+  favorites: pageFavorites,
+  compare: pageCompare,
   dataupdate: pageDataUpdate,
 };
 
